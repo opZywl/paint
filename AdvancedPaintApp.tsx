@@ -78,7 +78,7 @@ export default function AdvancedPaintApp() {
 
   const [windowBackgroundColor, setWindowBackgroundColor] = useState("#1E3A8A")
   const [pageBackgroundColor, setPageBackgroundColor] = useState("#000000")
-  const [windowTitle, setWindowTitle] = useState("Paint Avançado - sem título")
+  const [windowTitle, setWindowTitle] = useState("Lucas Paint - sem título")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [tempTitle, setTempTitle] = useState(windowTitle)
 
@@ -490,7 +490,7 @@ export default function AdvancedPaintApp() {
     if (!canvas) return
     const dataURL = canvas.toDataURL("image/png")
     const link = document.createElement("a")
-    link.download = `${windowTitle.replace("Paint Avançado - ", "") || "canvas"}.png`
+    link.download = `${windowTitle.replace("Lucas Paint -", "") || "canvas"}.png`
     link.href = dataURL
     document.body.appendChild(link)
     link.click()
@@ -511,8 +511,8 @@ export default function AdvancedPaintApp() {
               freshMainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
               freshMainCtx.drawImage(img, 0, 0)
               saveCanvasState()
-              setWindowTitle(`Paint Avançado - ${file.name}`)
-              setTempTitle(`Paint Avançado - ${file.name}`)
+              setWindowTitle(`Lucas Paint - ${file.name}`)
+              setTempTitle(`Lucas Paint - ${file.name}`)
             }
           }, 50)
         }
@@ -527,8 +527,8 @@ export default function AdvancedPaintApp() {
       mainCtx.fillStyle = "#FFFFFF"
       mainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
       saveCanvasState()
-      setWindowTitle("Paint Avançado - sem título")
-      setTempTitle("Paint Avançado - sem título")
+      setWindowTitle("Lucas Paint - sem título")
+      setTempTitle("Lucas Paint - sem título")
       clearSelection(false)
     }
   }, [getMainContext, saveCanvasState, clearSelection])
