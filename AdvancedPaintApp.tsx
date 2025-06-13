@@ -604,6 +604,16 @@ export default function AdvancedPaintApp() {
   ])
 
   useEffect(() => {
+    if (tool !== "select") {
+      if (selectionRect || isMovingSelection) {
+        finalizeSelectionMove()
+
+        setSelectionRect(null)
+      }
+    }
+  }, [tool, selectionRect, isMovingSelection, finalizeSelectionMove])
+
+  useEffect(() => {
     if (tool !== "select" && (selectionRect || isMovingSelection)) {
       finalizeSelectionMove()
     }
