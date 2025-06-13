@@ -8,69 +8,99 @@ import { ToolPanel } from "./components/ToolPanel"
 import { MenuBar } from "./components/MenuBar"
 import { useHistory } from "./hooks/useHistory"
 import { drawRectangle, drawCircle, floodFill, getColorAtPoint, rgbToHex } from "./utils/canvasUtils"
+import { PortfolioPopup } from "./components/PortfolioPopup"
+
+interface SelectionRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 export default function AdvancedPaintApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
-  const windowColorInputRef = useRef<HTMLInputElement>(null) // Ref para o input de cor da janela
+  const windowColorInputRef = useRef<HTMLInputElement>(null)
 
   const [isDrawing, setIsDrawing] = useState(false)
   const [color, setColor] = useState("#000000")
   const [tool, setTool] = useState("brush")
-  const [brushSize, setBrushSize] = useState(2)
+  const [brushSize, setBrushSize] = useState(10) // Aumentado para texto
   const [opacity, setOpacity] = useState(1)
   const [customColors, setCustomColors] = useState<string[]>([])
 
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
+  const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 }) // Para preview de formas e seleção
   const [isShapeDrawing, setIsShapeDrawing] = useState(false)
 
-  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#000000") // Padrão preto
+  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#000000")
   const [windowTitle, setWindowTitle] = useState("Paint Avançado - sem título")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [tempTitle, setTempTitle] = useState(windowTitle)
 
   const { saveState, undo, redo, canUndo, canRedo } = useHistory()
 
+  // Estados para ferramenta de Seleção
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null)
+  const [selectedImageData, setSelectedImageData] = useState<ImageData | null>(null)
+  const [isMovingSelection, setIsMovingSelection] = useState(false)
+  const [selectionMoveStart, setSelectionMoveStart] = useState({ x: 0, y: 0 })
+
+  const getMainContext = useCallback(() => canvasRef.current?.getContext("2d") || null, [])
+  const getOverlayContext = useCallback(() => overlayCanvasRef.current?.getContext("2d") || null, [])
+
   useEffect(() => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
-      context.fillStyle = "#FFFFFF" // Fundo do canvas sempre branco
-      context.fillRect(0, 0, canvas.width, canvas.height)
-      saveState(context.getImageData(0, 0, canvas.width, canvas.height))
+    const context = getMainContext()
+    if (context && canvasRef.current) {
+      context.fillStyle = "#FFFFFF"
+      context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      saveState(context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
     }
-  }, [saveState])
+  }, [saveState, getMainContext])
+
+  const applyOperationToMainCanvas = useCallback(
+      (operation: (ctx: CanvasRenderingContext2D) => void) => {
+        const mainCtx = getMainContext()
+        if (mainCtx) {
+          operation(mainCtx)
+          saveCanvasState()
+        }
+      },
+      [getMainContext, saveState], // saveCanvasState é definida depois, mas saveState é estável
+  )
+
+  const saveCanvasState = useCallback(() => {
+    const mainCtx = getMainContext()
+    if (mainCtx && canvasRef.current) {
+      saveState(mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
+    }
+  }, [saveState, getMainContext])
 
   const handleUndo = useCallback(() => {
-    // Envolver com useCallback
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
+    const mainCtx = getMainContext()
+    if (mainCtx) {
       const previousState = undo()
-      if (previousState) context.putImageData(previousState, 0, 0)
+      if (previousState) mainCtx.putImageData(previousState, 0, 0)
     }
-  }, [undo])
+  }, [undo, getMainContext])
 
   const handleRedo = useCallback(() => {
-    // Envolver com useCallback
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
+    const mainCtx = getMainContext()
+    if (mainCtx) {
       const nextState = redo()
-      if (nextState) context.putImageData(nextState, 0, 0)
+      if (nextState) mainCtx.putImageData(nextState, 0, 0)
     }
-  }, [redo])
+  }, [redo, getMainContext])
 
   const handleSave = useCallback(() => {
-    // Envolver com useCallback
-    const canvas = canvasRef.current
-    if (canvas) {
+    if (canvasRef.current) {
       const link = document.createElement("a")
       link.download = `${windowTitle.replace(/\s+/g, "_") || "painting"}.png`
-      link.href = canvas.toDataURL()
+      link.href = canvasRef.current.toDataURL()
       link.click()
     }
   }, [windowTitle])
@@ -87,7 +117,6 @@ export default function AdvancedPaintApp() {
         }
         return
       }
-
       if (e.ctrlKey || e.metaKey) {
         switch (e.key.toLowerCase()) {
           case "z":
@@ -103,13 +132,12 @@ export default function AdvancedPaintApp() {
             e.preventDefault()
             handleSave()
             break
-          case "o": // Atalho para Abrir
+          case "o":
             e.preventDefault()
-            document.getElementById("file-open-trigger")?.click() // Simula clique no item do menu
+            document.getElementById("file-open-trigger")?.click()
             break
         }
       }
-
       switch (e.key.toLowerCase()) {
         case "b":
           setTool("brush")
@@ -126,39 +154,136 @@ export default function AdvancedPaintApp() {
         case "t":
           setTool("text")
           break
-        case "s":
-          if (!e.ctrlKey && !e.metaKey) setTool("select")
-          break
         case "i":
           setTool("eyedropper")
           break
         case "p":
           setTool("spray")
           break
+        case "v": // 'v' para seleção (move tool)
+          if (!e.ctrlKey && !e.metaKey) {
+            setTool("select")
+            finalizeSelectionMove() // Finaliza seleção anterior se houver
+          }
+          break
+        case "escape": // Esc para cancelar seleção
+          if (tool === "select" && (selectionRect || isSelecting || isMovingSelection)) {
+            clearSelection()
+          }
+          break
       }
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isEditingTitle, tempTitle, windowTitle, handleUndo, handleRedo, handleSave]) // Adicionar dependências
+  }, [
+    isEditingTitle,
+    tempTitle,
+    windowTitle,
+    handleUndo,
+    handleRedo,
+    handleSave,
+    tool,
+    selectionRect,
+    isSelecting,
+    isMovingSelection,
+  ])
 
-  const saveCanvasState = useCallback(() => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
-      saveState(context.getImageData(0, 0, canvas.width, canvas.height))
+  const finalizeSelectionMove = useCallback(() => {
+    const mainCtx = getMainContext()
+    const overlayCtx = getOverlayContext()
+    if (mainCtx && overlayCtx && selectedImageData && selectionRect && isMovingSelection) {
+      // Limpar a área original no canvas principal (preencher com branco)
+      mainCtx.fillStyle = "#FFFFFF"
+      mainCtx.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
+      // Desenhar a imagem movida no canvas principal
+      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y)
+      saveCanvasState()
     }
-  }, [saveState])
+    clearSelection(false) // Não salva estado aqui, já salvou acima
+    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+  }, [
+    getMainContext,
+    getOverlayContext,
+    selectedImageData,
+    selectionRect,
+    currentPos,
+    saveCanvasState,
+    isMovingSelection,
+  ])
+
+  const clearSelection = (save = true) => {
+    setIsSelecting(false)
+    setSelectionRect(null)
+    setSelectedImageData(null)
+    setIsMovingSelection(false)
+    const overlayCtx = getOverlayContext()
+    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+    if (save) saveCanvasState()
+  }
+
+  // Mudar ferramenta também finaliza seleção
+  useEffect(() => {
+    if (tool !== "select" && (selectionRect || isMovingSelection)) {
+      finalizeSelectionMove()
+    }
+  }, [tool, selectionRect, isMovingSelection, finalizeSelectionMove])
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (!context || !canvas) return
-    const rect = canvas.getBoundingClientRect()
+    const mainCtx = getMainContext()
+    const overlayCtx = getOverlayContext()
+    if (!mainCtx || !canvasRef.current || !overlayCtx || !overlayCanvasRef.current) return
+
+    const rect = canvasRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
+    setCurrentPos({ x, y })
     setStartPos({ x, y })
+
+    if (tool === "select") {
+      if (
+          selectionRect &&
+          x >= selectionRect.x &&
+          x <= selectionRect.x + selectionRect.width &&
+          y >= selectionRect.y &&
+          y <= selectionRect.y + selectionRect.height
+      ) {
+        // Clicou dentro de uma seleção existente, iniciar movimento
+        if (!selectedImageData) {
+          // Capturar imagem se ainda não foi
+          const imageData = mainCtx.getImageData(
+              selectionRect.x,
+              selectionRect.y,
+              selectionRect.width,
+              selectionRect.height,
+          )
+          setSelectedImageData(imageData)
+        }
+        setIsMovingSelection(true)
+        setSelectionMoveStart({ x: x - selectionRect.x, y: y - selectionRect.y }) // Posição do clique relativa ao canto da seleção
+      } else {
+        // Clicou fora, finalizar seleção anterior e iniciar nova
+        finalizeSelectionMove()
+        setIsSelecting(true)
+      }
+      return
+    }
+
+    if (tool === "text") {
+      const text = prompt("Digite o texto:")
+      if (text) {
+        applyOperationToMainCanvas((ctx) => {
+          ctx.font = `${brushSize * 2}px Arial` // Usar brushSize para tamanho da fonte
+          ctx.fillStyle = color
+          ctx.globalAlpha = opacity
+          ctx.fillText(text, x, y)
+          ctx.globalAlpha = 1 // Resetar alpha
+        })
+      }
+      return
+    }
+
     if (tool === "eyedropper") {
-      const pickedColor = getColorAtPoint(context, x, y)
+      const pickedColor = getColorAtPoint(mainCtx, x, y)
       setColor(rgbToHex(pickedColor))
       return
     }
@@ -167,83 +292,156 @@ export default function AdvancedPaintApp() {
       return
     }
     if (tool === "bucket") {
-      floodFill(context, Math.floor(x), Math.floor(y), color, canvas)
+      floodFill(mainCtx, Math.floor(x), Math.floor(y), color, canvasRef.current)
       saveCanvasState()
       return
     }
-    context.globalAlpha = opacity
-    context.beginPath()
-    context.moveTo(x, y)
+
+    mainCtx.globalAlpha = opacity
+    mainCtx.beginPath()
+    mainCtx.moveTo(x, y)
     setIsDrawing(true)
   }
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    const overlayCanvas = overlayCanvasRef.current
-    const context = canvas?.getContext("2d")
-    const overlayContext = overlayCanvas?.getContext("2d")
-    if (!context || !canvas) return
-    const rect = canvas.getBoundingClientRect()
+    const mainCtx = getMainContext()
+    const overlayCtx = getOverlayContext()
+    if (!mainCtx || !canvasRef.current || !overlayCtx || !overlayCanvasRef.current) return
+
+    const rect = canvasRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    if (isShapeDrawing && overlayContext && overlayCanvas) {
-      overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
-      overlayContext.globalAlpha = opacity
-      if (tool === "rectangle") drawRectangle(overlayContext, startPos.x, startPos.y, x, y, color)
-      else if (tool === "circle") {
-        const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
-        drawCircle(overlayContext, startPos.x, startPos.y, radius, color)
+
+    overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height) // Limpar overlay a cada frame de desenho
+
+    if (tool === "select") {
+      if (isSelecting) {
+        // Desenhando o retângulo de seleção
+        const width = x - startPos.x
+        const height = y - startPos.y
+        overlayCtx.setLineDash([4, 2])
+        overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
+        overlayCtx.strokeRect(startPos.x, startPos.y, width, height)
+        overlayCtx.setLineDash([])
+        setCurrentPos({ x, y }) // Atualiza currentPos para o fim da seleção
+      } else if (isMovingSelection && selectedImageData && selectionRect) {
+        // Movendo a seleção
+        const newX = x - selectionMoveStart.x
+        const newY = y - selectionMoveStart.y
+        overlayCtx.putImageData(selectedImageData, newX, newY)
+        // Desenhar contorno da área movida
+        overlayCtx.setLineDash([4, 2])
+        overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
+        overlayCtx.strokeRect(newX, newY, selectionRect.width, selectionRect.height)
+        overlayCtx.setLineDash([])
+        setCurrentPos({ x: newX, y: newY }) // Atualiza currentPos para a posição da seleção movida
+      } else if (selectionRect) {
+        // Apenas mostrar o contorno da seleção existente se não estiver movendo
+        overlayCtx.setLineDash([4, 2])
+        overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
+        overlayCtx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
+        overlayCtx.setLineDash([])
       }
       return
     }
+
+    setCurrentPos({ x, y }) // Atualizar currentPos para outras ferramentas
+
+    if (isShapeDrawing) {
+      overlayCtx.globalAlpha = opacity
+      if (tool === "rectangle") drawRectangle(overlayCtx, startPos.x, startPos.y, x, y, color)
+      else if (tool === "circle") {
+        const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
+        drawCircle(overlayCtx, startPos.x, startPos.y, radius, color)
+      }
+      return
+    }
+
     if (!isDrawing) return
-    context.globalAlpha = opacity
-    context.lineTo(x, y)
+
+    mainCtx.lineTo(x, y)
     if (tool === "eraser") {
-      context.globalCompositeOperation = "destination-out"
-      context.lineWidth = brushSize * 2
+      mainCtx.globalCompositeOperation = "destination-out"
+      mainCtx.lineWidth = brushSize * 2
     } else if (tool === "spray") {
+      mainCtx.globalCompositeOperation = "source-over"
       for (let i = 0; i < 20; i++) {
         const offsetX = (Math.random() - 0.5) * brushSize * 2
         const offsetY = (Math.random() - 0.5) * brushSize * 2
-        context.fillStyle = color
-        context.fillRect(x + offsetX, y + offsetY, 1, 1)
+        mainCtx.fillStyle = color
+        mainCtx.fillRect(x + offsetX, y + offsetY, 1, 1)
       }
-      return
+      return // Spray não usa stroke
     } else {
-      context.globalCompositeOperation = "source-over"
-      context.strokeStyle = color
-      context.lineWidth = brushSize
+      mainCtx.globalCompositeOperation = "source-over"
+      mainCtx.strokeStyle = color
+      mainCtx.lineWidth = brushSize
     }
-    context.lineCap = "round"
-    context.stroke()
+    mainCtx.lineCap = "round"
+    mainCtx.stroke()
   }
 
   const stopDrawing = () => {
-    const canvas = canvasRef.current
-    const overlayCanvas = overlayCanvasRef.current
-    const context = canvas?.getContext("2d")
-    const overlayContext = overlayCanvas?.getContext("2d")
-    if (isShapeDrawing && context && overlayContext && overlayCanvas) {
-      const imageData = overlayContext.getImageData(0, 0, overlayCanvas.width, overlayCanvas.height)
-      context.putImageData(imageData, 0, 0)
-      overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
-      setIsShapeDrawing(false)
+    const mainCtx = getMainContext()
+    const overlayCtx = getOverlayContext()
+    if (!mainCtx || !overlayCtx || !overlayCanvasRef.current) return
+
+    if (tool === "select") {
+      if (isSelecting) {
+        // Finalizar definição do retângulo de seleção
+        const selX = Math.min(startPos.x, currentPos.x)
+        const selY = Math.min(startPos.y, currentPos.y)
+        const selWidth = Math.abs(currentPos.x - startPos.x)
+        const selHeight = Math.abs(currentPos.y - startPos.y)
+
+        if (selWidth > 0 && selHeight > 0) {
+          setSelectionRect({ x: selX, y: selY, width: selWidth, height: selHeight })
+          const imageData = mainCtx.getImageData(selX, selY, selWidth, selHeight)
+          setSelectedImageData(imageData)
+        } else {
+          clearSelection(false) // Não salvar se a seleção for inválida
+        }
+        setIsSelecting(false)
+      } else if (isMovingSelection) {
+        // Não finalizar aqui, finalizeSelectionMove() cuida disso ao clicar fora ou mudar de ferramenta
+        // Apenas para o estado de arrastar
+        // setIsMovingSelection(false); // Não definir como false aqui, pois o usuário pode continuar movendo
+      }
+      // Não salvar estado aqui para seleção, o estado é salvo ao aplicar a movimentação
+      return
+    }
+
+    if (isShapeDrawing) {
+      // Desenhar a forma final no canvas principal
+      mainCtx.globalAlpha = opacity
+      if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color)
+      else if (tool === "circle") {
+        const radius = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2))
+        drawCircle(mainCtx, startPos.x, startPos.y, radius, color)
+      }
+      mainCtx.globalAlpha = 1 // Resetar alpha
       saveCanvasState()
-    } else if (isDrawing) saveCanvasState()
+    } else if (isDrawing) {
+      // Para pincel, borracha, spray
+      mainCtx.beginPath() // Necessário para que o próximo stroke não continue o anterior
+      saveCanvasState()
+    }
+
+    overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
     setIsDrawing(false)
+    setIsShapeDrawing(false)
+    mainCtx.globalCompositeOperation = "source-over" // Resetar composite operation
   }
 
   const handleLoad = (file: File) => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (!context || !canvas) return
+    const mainCtx = getMainContext()
+    if (!mainCtx || !canvasRef.current) return
     const img = new Image()
     img.onload = () => {
-      context.clearRect(0, 0, canvas.width, canvas.height)
-      context.fillStyle = "#FFFFFF"
-      context.fillRect(0, 0, canvas.width, canvas.height)
-      context.drawImage(img, 0, 0)
+      mainCtx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height)
+      mainCtx.fillStyle = "#FFFFFF"
+      mainCtx.fillRect(0, 0, canvasRef.current!.width, canvasRef.current!.height)
+      mainCtx.drawImage(img, 0, 0)
       saveCanvasState()
       setWindowTitle(`Paint Avançado - ${file.name}`)
       setTempTitle(`Paint Avançado - ${file.name}`)
@@ -252,14 +450,14 @@ export default function AdvancedPaintApp() {
   }
 
   const handleClear = () => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
-      context.fillStyle = "#FFFFFF"
-      context.fillRect(0, 0, canvas.width, canvas.height)
+    const mainCtx = getMainContext()
+    if (mainCtx && canvasRef.current) {
+      mainCtx.fillStyle = "#FFFFFF"
+      mainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
       saveCanvasState()
       setWindowTitle("Paint Avançado - sem título")
       setTempTitle("Paint Avançado - sem título")
+      clearSelection(false)
     }
   }
 
@@ -270,11 +468,10 @@ export default function AdvancedPaintApp() {
   }
 
   const viewBlack = () => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
-      const currentState = context.getImageData(0, 0, canvas.width, canvas.height)
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+    const mainCtx = getMainContext()
+    if (mainCtx && canvasRef.current) {
+      const currentState = mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height)
+      const imageData = mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height)
       const data = imageData.data
       for (let i = 0; i < data.length; i += 4) {
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
@@ -282,23 +479,22 @@ export default function AdvancedPaintApp() {
         data[i + 1] = avg < 128 ? 0 : 255
         data[i + 2] = avg < 128 ? 0 : 255
       }
-      context.putImageData(imageData, 0, 0)
+      mainCtx.putImageData(imageData, 0, 0)
       setTimeout(() => {
-        context.putImageData(currentState, 0, 0)
+        mainCtx.putImageData(currentState, 0, 0)
       }, 2000)
     }
   }
 
-  const startDragging = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isEditingTitle) return // Não arrastar se estiver editando título
+  const startDraggingWindow = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isEditingTitle) return
     setDragging(true)
     setPosition({
       x: e.clientX - (containerRef.current?.offsetLeft || 0),
       y: e.clientY - (containerRef.current?.offsetTop || 0),
     })
   }
-
-  const onDrag = (e: React.MouseEvent<HTMLDivElement>) => {
+  const onDragWindow = (e: React.MouseEvent<HTMLDivElement>) => {
     if (dragging) {
       const left = e.clientX - position.x
       const top = e.clientY - position.y
@@ -308,28 +504,21 @@ export default function AdvancedPaintApp() {
       }
     }
   }
-  const stopDragging = () => setDragging(false)
+  const stopDraggingWindow = () => setDragging(false)
 
   const handleTitleDoubleClick = () => {
     setTempTitle(windowTitle)
     setIsEditingTitle(true)
   }
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTempTitle(e.target.value)
-  }
-
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => setTempTitle(e.target.value)
   const handleTitleBlur = () => {
     setWindowTitle(tempTitle)
     setIsEditingTitle(false)
   }
-
-  const openWindowColorPicker = () => {
-    windowColorInputRef.current?.click()
-  }
+  const openWindowColorPicker = () => windowColorInputRef.current?.click()
 
   return (
-      <div className="h-screen bg-teal-600 overflow-hidden">
+      <div className="h-screen bg-teal-600 overflow-hidden select-none">
         <div
             ref={containerRef}
             className="absolute border-2 border-white shadow-lg"
@@ -338,7 +527,7 @@ export default function AdvancedPaintApp() {
               left: "50%",
               top: "50%",
               transform: "translate(-50%, -50%)",
-              backgroundColor: windowBackgroundColor, // Aplicar cor de fundo da janela
+              backgroundColor: windowBackgroundColor,
             }}
         >
           <input
@@ -350,10 +539,10 @@ export default function AdvancedPaintApp() {
           />
           <div
               className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center cursor-move"
-              onMouseDown={startDragging}
-              onMouseMove={onDrag}
-              onMouseUp={stopDragging}
-              onMouseLeave={stopDragging}
+              onMouseDown={startDraggingWindow}
+              onMouseMove={onDragWindow}
+              onMouseUp={stopDraggingWindow}
+              onMouseLeave={stopDraggingWindow}
           >
             {isEditingTitle ? (
                 <input
@@ -388,7 +577,6 @@ export default function AdvancedPaintApp() {
               </Button>
             </div>
           </div>
-
           <MenuBar
               onSave={handleSave}
               onLoad={handleLoad}
@@ -398,9 +586,8 @@ export default function AdvancedPaintApp() {
               canUndo={canUndo}
               canRedo={canRedo}
               onViewBlack={viewBlack}
-              onOpenWindowColorPicker={openWindowColorPicker} // Passar a nova função
+              onOpenWindowColorPicker={openWindowColorPicker}
           />
-
           <div className="flex">
             <ToolPanel
                 selectedTool={tool}
@@ -412,8 +599,10 @@ export default function AdvancedPaintApp() {
             />
             <div
                 className="flex-grow relative border border-gray-400"
-                style={{ width: "800px", height: "500px", overflow: "auto" }}
+                style={{ width: "800px", height: "500px", overflow: "hidden" }}
             >
+              {" "}
+              {/* Overflow hidden para canvas */}
               <canvas
                   ref={canvasRef}
                   width={1200}
@@ -422,30 +611,34 @@ export default function AdvancedPaintApp() {
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
                   onMouseOut={stopDrawing}
-                  className="absolute top-0 left-0 cursor-crosshair bg-white" // Canvas sempre com fundo branco
+                  className="absolute top-0 left-0 cursor-crosshair bg-white"
               />
               <canvas
                   ref={overlayCanvasRef}
                   width={1200}
                   height={800}
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseOut={stopDrawing}
                   className="absolute top-0 left-0 pointer-events-none"
+                  style={{ cursor: tool === "select" && selectionRect ? "move" : "crosshair" }}
               />
             </div>
           </div>
-
           <ColorPicker
               selectedColor={color}
               onColorChange={setColor}
               customColors={customColors}
               onAddCustomColor={addCustomColor}
           />
-
           <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between">
           <span>
-            Ferramenta: {tool} | Tamanho: {brushSize}px | Opacidade: {Math.round(opacity * 100)}%
+            Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
           </span>
-            <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer</span>
+            <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção</span>
           </div>
+          <PortfolioPopup />
         </div>
       </div>
   )
