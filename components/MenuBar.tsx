@@ -14,7 +14,8 @@ interface MenuBarProps {
   canUndo: boolean
   canRedo: boolean
   onViewBlack: () => void
-  onOpenWindowColorPicker: () => void // Nova prop
+  onOpenWindowColorPicker: () => void
+  onOpenPageBackgroundColorPicker: () => void // Adicionar esta linha
 }
 
 export function MenuBar({
@@ -26,7 +27,8 @@ export function MenuBar({
                           canUndo,
                           canRedo,
                           onViewBlack,
-                          onOpenWindowColorPicker, // Nova prop
+                          onOpenWindowColorPicker,
+                          onOpenPageBackgroundColorPicker, // Adicionar esta linha
                         }: MenuBarProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -123,6 +125,14 @@ export function MenuBar({
                   }}
               >
                 Cor da Janela
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    onOpenPageBackgroundColorPicker()
+                  }}
+              >
+                Cor do Fundo da Página
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -9,6 +9,7 @@ import { MenuBar } from "./components/MenuBar"
 import { useHistory } from "./hooks/useHistory"
 import { drawRectangle, drawCircle, floodFill, getColorAtPoint, rgbToHex } from "./utils/canvasUtils"
 import { PortfolioPopup } from "./components/PortfolioPopup"
+import { Maximize2, Minimize2, Minus, X } from "lucide-react"
 
 interface SelectionRect {
   x: number
@@ -17,10 +18,18 @@ interface SelectionRect {
   height: number
 }
 
+interface OriginalWindowState {
+  width: string
+  left: string
+  top: string
+  transform: string
+}
+
 export default function AdvancedPaintApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null) // Janela principal do Paint
+  const canvasContainerRef = useRef<HTMLDivElement>(null) // Div que contém os canvases
   const windowColorInputRef = useRef<HTMLInputElement>(null)
   const pageBgColorInputRef = useRef<HTMLInputElement>(null)
 
@@ -37,11 +46,14 @@ export default function AdvancedPaintApp() {
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 })
   const [isShapeDrawing, setIsShapeDrawing] = useState(false)
 
-  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#000000")
+  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#FFFFFF") // Default window bg to white
   const [pageBackgroundColor, setPageBackgroundColor] = useState("#0D9488")
   const [windowTitle, setWindowTitle] = useState("Paint Avançado - sem título")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [tempTitle, setTempTitle] = useState(windowTitle)
+
+  const [isMaximized, setIsMaximized] = useState(false)
+  const originalWindowState = useRef<OriginalWindowState | null>(null)
 
   const { saveState, undo, redo, canUndo, canRedo } = useHistory()
 
@@ -56,10 +68,88 @@ export default function AdvancedPaintApp() {
 
   const saveCanvasState = useCallback(() => {
     const mainCtx = getMainContext()
-    if (mainCtx && canvasRef.current) {
-      saveState(mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
+    if (mainCtx && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+      try {
+        saveState(mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
+      } catch (error) {
+        console.error("Error saving canvas state:", error)
+      }
     }
   }, [saveState, getMainContext])
+
+  const resizeCanvases = useCallback(
+      (forceWidth?: number, forceHeight?: number) => {
+        const mainCanvas = canvasRef.current
+        const overlayCanvas = overlayCanvasRef.current
+        const canvasContainer = canvasContainerRef.current
+
+        if (mainCanvas && overlayCanvas && canvasContainer) {
+          const mainCtx = mainCanvas.getContext("2d")
+          if (!mainCtx) return
+
+          const tempCanvas = document.createElement("canvas")
+          tempCanvas.width = mainCanvas.width
+          tempCanvas.height = mainCanvas.height
+          const tempCtx = tempCanvas.getContext("2d")
+          if (tempCtx && mainCanvas.width > 0 && mainCanvas.height > 0) {
+            tempCtx.drawImage(mainCanvas, 0, 0)
+          }
+
+          const newWidth = forceWidth ?? canvasContainer.clientWidth
+          const newHeight = forceHeight ?? canvasContainer.clientHeight
+
+          if (newWidth <= 0 || newHeight <= 0) return
+
+          mainCanvas.width = newWidth
+          mainCanvas.height = newHeight
+          overlayCanvas.width = newWidth
+          overlayCanvas.height = newHeight
+
+          mainCtx.fillStyle = "#FFFFFF"
+          mainCtx.fillRect(0, 0, newWidth, newHeight)
+
+          if (tempCtx) {
+            mainCtx.drawImage(
+                tempCanvas,
+                0,
+                0,
+                tempCanvas.width,
+                tempCanvas.height,
+                0,
+                0,
+                tempCanvas.width,
+                tempCanvas.height,
+            )
+          }
+
+          const overlayCtx = overlayCanvas.getContext("2d")
+          overlayCtx?.clearRect(0, 0, newWidth, newHeight)
+
+          saveCanvasState()
+        }
+      },
+      [saveCanvasState],
+  )
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isMaximized) {
+        resizeCanvases() // Sem argumentos, usa o tamanho do contêiner
+      } else {
+        resizeCanvases(1200, 800) // Força a resolução padrão
+      }
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [isMaximized, resizeCanvases])
+
+  // Initial canvas setup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      resizeCanvases(1200, 800)
+    }, 50)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Apenas na montagem
 
   const applyOperationToMainCanvas = useCallback(
       (operation: (ctx: CanvasRenderingContext2D) => void) => {
@@ -104,7 +194,9 @@ export default function AdvancedPaintApp() {
         setSelectedImageData(null)
         setIsMovingSelection(false)
         const overlayCtx = getOverlayContext()
-        overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+        if (overlayCtx && overlayCtx.canvas.width > 0 && overlayCtx.canvas.height > 0) {
+          overlayCtx.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+        }
         if (save) saveCanvasState()
       },
       [getOverlayContext, saveCanvasState],
@@ -114,13 +206,15 @@ export default function AdvancedPaintApp() {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
     if (mainCtx && overlayCtx && selectedImageData && selectionRect && isMovingSelection) {
-      mainCtx.fillStyle = "#FFFFFF"
+      mainCtx.fillStyle = "#FFFFFF" // Erase old position of selection
       mainCtx.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
-      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y)
+      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y) // Draw selection at new position
       saveCanvasState()
     }
-    clearSelection(false)
-    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+    clearSelection(false) // Clear selection dashed lines and state
+    if (overlayCtx.canvas.width > 0 && overlayCtx.canvas.height > 0) {
+      overlayCtx.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+    }
   }, [
     getMainContext,
     getOverlayContext,
@@ -131,15 +225,6 @@ export default function AdvancedPaintApp() {
     isMovingSelection,
     clearSelection,
   ])
-
-  useEffect(() => {
-    const context = getMainContext()
-    if (context && canvasRef.current) {
-      context.fillStyle = "#FFFFFF"
-      context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      saveState(context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
-    }
-  }, [saveState, getMainContext])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -242,6 +327,7 @@ export default function AdvancedPaintApp() {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
     if (!mainCtx || !canvasRef.current || !overlayCtx || !overlayCanvasRef.current) return
+    if (canvasRef.current.width === 0 || canvasRef.current.height === 0) return
 
     const rect = canvasRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left
@@ -314,6 +400,7 @@ export default function AdvancedPaintApp() {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
     if (!mainCtx || !canvasRef.current || !overlayCtx || !overlayCanvasRef.current) return
+    if (canvasRef.current.width === 0 || canvasRef.current.height === 0) return
 
     const rect = canvasRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left
@@ -388,6 +475,7 @@ export default function AdvancedPaintApp() {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
     if (!mainCtx || !overlayCtx || !overlayCanvasRef.current) return
+    if (overlayCanvasRef.current.width === 0 || overlayCanvasRef.current.height === 0) return
 
     if (tool === "select") {
       if (isSelecting) {
@@ -405,6 +493,7 @@ export default function AdvancedPaintApp() {
         }
         setIsSelecting(false)
       }
+      // Do not clear overlay here for select tool, it's handled by draw or finalizeSelectionMove
       return
     }
 
@@ -418,14 +507,14 @@ export default function AdvancedPaintApp() {
       mainCtx.globalAlpha = 1
       saveCanvasState()
     } else if (isDrawing) {
-      mainCtx.beginPath()
+      mainCtx.beginPath() // End current path
       saveCanvasState()
     }
 
     overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
     setIsDrawing(false)
     setIsShapeDrawing(false)
-    mainCtx.globalCompositeOperation = "source-over"
+    mainCtx.globalCompositeOperation = "source-over" // Reset composite operation
   }
 
   const handleLoad = (file: File) => {
@@ -433,10 +522,33 @@ export default function AdvancedPaintApp() {
     if (!mainCtx || !canvasRef.current) return
     const img = new Image()
     img.onload = () => {
-      mainCtx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height)
+      // Resize canvas to image size or keep current size and draw image?
+      // For now, clear and draw image, potentially changing aspect ratio.
+      // A more robust solution might offer options or fit image within current canvas.
+      const newWidth = img.width
+      const newHeight = img.height
+
+      if (canvasContainerRef.current) {
+        // Option 1: Resize canvas container to image size (if not maximized)
+        if (!isMaximized) {
+          // This might be too complex if window size is also managed
+        }
+        // Option 2: Resize internal canvas attributes to image, then let CSS scale
+        // This is what resizeCanvases would do if container size changed.
+        // For loading, we might want to set canvas attributes directly.
+      }
+
+      // Ensure canvases are large enough for the image
+      if (canvasRef.current.width < newWidth || canvasRef.current.height < newHeight) {
+        // If we want to resize the canvas to fit the image:
+        // This would require calling a modified resizeCanvases or similar logic
+        // For simplicity now, we'll just draw it. User can resize window if needed.
+      }
+
+      mainCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
       mainCtx.fillStyle = "#FFFFFF"
-      mainCtx.fillRect(0, 0, canvasRef.current!.width, canvasRef.current!.height)
-      mainCtx.drawImage(img, 0, 0)
+      mainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      mainCtx.drawImage(img, 0, 0) // Draw image at original size
       saveCanvasState()
       setWindowTitle(`Paint Avançado - ${file.name}`)
       setTempTitle(`Paint Avançado - ${file.name}`)
@@ -446,7 +558,7 @@ export default function AdvancedPaintApp() {
 
   const handleClear = () => {
     const mainCtx = getMainContext()
-    if (mainCtx && canvasRef.current) {
+    if (mainCtx && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
       mainCtx.fillStyle = "#FFFFFF"
       mainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
       saveCanvasState()
@@ -464,7 +576,7 @@ export default function AdvancedPaintApp() {
 
   const viewBlack = () => {
     const mainCtx = getMainContext()
-    if (mainCtx && canvasRef.current) {
+    if (mainCtx && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
       const currentState = mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height)
       const imageData = mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height)
       const data = imageData.data
@@ -482,7 +594,7 @@ export default function AdvancedPaintApp() {
   }
 
   const startDraggingWindow = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isEditingTitle) return
+    if (isEditingTitle || isMaximized) return
     setDragging(true)
     setPosition({
       x: e.clientX - (containerRef.current?.offsetLeft || 0),
@@ -490,7 +602,7 @@ export default function AdvancedPaintApp() {
     })
   }
   const onDragWindow = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (dragging) {
+    if (dragging && !isMaximized) {
       const left = e.clientX - position.x
       const top = e.clientY - position.y
       if (containerRef.current) {
@@ -513,6 +625,63 @@ export default function AdvancedPaintApp() {
   const openWindowColorPicker = () => windowColorInputRef.current?.click()
   const openPageBackgroundColorPicker = () => pageBgColorInputRef.current?.click()
 
+  const handleToggleMaximize = () => {
+    const windowEl = containerRef.current
+    if (!windowEl) return
+
+    setIsMaximized((prevIsMaximized) => {
+      const nextIsMaximized = !prevIsMaximized
+      if (nextIsMaximized) {
+        originalWindowState.current = {
+          width: windowEl.style.width || getComputedStyle(windowEl).width,
+          left: windowEl.style.left || getComputedStyle(windowEl).left,
+          top: windowEl.style.top || getComputedStyle(windowEl).top,
+          transform: windowEl.style.transform || getComputedStyle(windowEl).transform,
+        }
+      }
+      // resizeCanvases will be called by the useEffect hook watching isMaximized
+      return nextIsMaximized
+    })
+  }
+
+  const getWindowStyle = (): React.CSSProperties => {
+    const baseStyle: React.CSSProperties = {
+      backgroundColor: windowBackgroundColor,
+      position: "absolute",
+      borderWidth: "2px",
+      borderColor: "white",
+      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
+      display: "flex", // Added for flex column layout
+      flexDirection: "column", // Added for flex column layout
+    }
+
+    if (isMaximized) {
+      return {
+        ...baseStyle,
+        width: "100%",
+        height: "100%",
+        top: "0px",
+        left: "0px",
+        transform: "none",
+      }
+    } else {
+      const styleToRestore = originalWindowState.current || {
+        width: "900px", // Default width
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -50%)",
+      }
+      return {
+        ...baseStyle,
+        width: styleToRestore.width,
+        // height will be determined by content or a fixed value if needed
+        left: styleToRestore.left,
+        top: styleToRestore.top,
+        transform: styleToRestore.transform,
+      }
+    }
+  }
+
   return (
       <>
         <input
@@ -523,17 +692,7 @@ export default function AdvancedPaintApp() {
             onChange={(e) => setPageBackgroundColor(e.target.value)}
         />
         <div className="h-screen overflow-hidden select-none" style={{ backgroundColor: pageBackgroundColor }}>
-          <div
-              ref={containerRef}
-              className="absolute border-2 border-white shadow-lg"
-              style={{
-                width: "900px",
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -50%)",
-                backgroundColor: windowBackgroundColor,
-              }}
-          >
+          <div ref={containerRef} style={getWindowStyle()}>
             <input
                 type="color"
                 ref={windowColorInputRef}
@@ -542,7 +701,8 @@ export default function AdvancedPaintApp() {
                 onChange={(e) => setWindowBackgroundColor(e.target.value)}
             />
             <div
-                className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center cursor-move"
+                className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center shrink-0" // shrink-0 for title bar
+                style={{ cursor: isMaximized ? "default" : "move" }}
                 onMouseDown={startDraggingWindow}
                 onMouseMove={onDragWindow}
                 onMouseUp={stopDraggingWindow}
@@ -571,13 +731,17 @@ export default function AdvancedPaintApp() {
               )}
               <div className="flex gap-1">
                 <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                  _
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700"
+                    onClick={handleToggleMaximize}
+                >
+                  {isMaximized ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
                 </Button>
                 <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                  □
-                </Button>
-                <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                  ×
+                  <X className="h-3 w-3" />
                 </Button>
               </div>
             </div>
@@ -593,7 +757,9 @@ export default function AdvancedPaintApp() {
                 onOpenWindowColorPicker={openWindowColorPicker}
                 onOpenPageBackgroundColorPicker={openPageBackgroundColorPicker}
             />
-            <div className="flex">
+            <div className="flex flex-grow min-h-0">
+              {" "}
+              {/* flex-grow and min-h-0 for canvas area to expand */}
               <ToolPanel
                   selectedTool={tool}
                   onToolChange={setTool}
@@ -603,29 +769,28 @@ export default function AdvancedPaintApp() {
                   onOpacityChange={setOpacity}
               />
               <div
-                  className="flex-grow relative border border-gray-400"
-                  style={{ width: "800px", height: "500px", overflow: "hidden" }}
+                  ref={canvasContainerRef}
+                  className="relative border border-gray-400 flex-grow bg-white"
+                  style={{
+                    height: isMaximized ? undefined : "500px", // Altura fixa no modo padrão
+                    overflow: "hidden",
+                  }}
               >
                 <canvas
                     ref={canvasRef}
-                    width={1200}
-                    height={800}
+                    // width/height attributes are set by resizeCanvases
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
                     onMouseOut={stopDrawing}
-                    className="absolute top-0 left-0 cursor-crosshair bg-white"
+                    className="absolute top-0 left-0 cursor-crosshair"
+                    style={{ width: "100%", height: "100%" }} // CSS to fill container
                 />
                 <canvas
                     ref={overlayCanvasRef}
-                    width={1200}
-                    height={800}
-                    onMouseDown={startDrawing}
-                    onMouseMove={draw}
-                    onMouseUp={stopDrawing}
-                    onMouseOut={stopDrawing}
+                    // width/height attributes are set by resizeCanvases
                     className="absolute top-0 left-0 pointer-events-none"
-                    style={{ cursor: tool === "select" && (isMovingSelection || selectionRect) ? "move" : "crosshair" }}
+                    style={{ width: "100%", height: "100%" }} // CSS to fill container
                 />
               </div>
             </div>
@@ -635,8 +800,10 @@ export default function AdvancedPaintApp() {
                 customColors={customColors}
                 onAddCustomColor={addCustomColor}
             />
-            <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between">
-            <span>
+            <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between shrink-0">
+              {" "}
+              {/* shrink-0 for status bar */}
+              <span>
               Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
             </span>
               <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção</span>
