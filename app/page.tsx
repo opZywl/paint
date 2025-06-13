@@ -1,7 +1,7 @@
 "use client"
 
-import Component from "../CorrectedPaintApp"
+import AdvancedPaintApp from "../AdvancedPaintApp"
 
 export default function SyntheticV0PageForDeployment() {
-  return <Component />
+  return <AdvancedPaintApp />
 }
