@@ -14,107 +14,135 @@ interface MenuBarProps {
   canUndo: boolean
   canRedo: boolean
   onViewBlack: () => void
+  onOpenWindowColorPicker: () => void // Nova prop
 }
 
-export function MenuBar({ onSave, onLoad, onUndo, onRedo, onClear, canUndo, canRedo, onViewBlack }: MenuBarProps) {
-  const fileInputRef = React.useRef<HTMLInputElement>(null) // Adicionar esta ref
+export function MenuBar({
+                          onSave,
+                          onLoad,
+                          onUndo,
+                          onRedo,
+                          onClear,
+                          canUndo,
+                          canRedo,
+                          onViewBlack,
+                          onOpenWindowColorPicker, // Nova prop
+                        }: MenuBarProps) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   const handleFileLoad = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
       onLoad(file)
     }
+    // Resetar o valor do input para permitir selecionar o mesmo arquivo novamente
+    if (event.target) {
+      event.target.value = ""
+    }
   }
 
   const triggerFileInput = () => {
-    // Adicionar esta função
     fileInputRef.current?.click()
   }
 
   return (
-    <div className="bg-gray-300 px-2 py-1 border-b border-gray-400 flex items-center gap-2">
-      <div className="flex items-center gap-1 mr-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
-              Arquivo
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            {/* Input de arquivo oculto */}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileLoad}
-              className="hidden"
-              ref={fileInputRef} // Associar a ref
-            />
-            {/* Item do menu para acionar o input */}
-            <DropdownMenuItem onSelect={triggerFileInput}>Abrir</DropdownMenuItem>
-            <DropdownMenuItem onSelect={onSave}>Salvar</DropdownMenuItem>
-            <DropdownMenuItem onSelect={onClear}>Novo</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="bg-gray-300 px-2 py-1 border-b border-gray-400 flex items-center gap-2">
+        <div className="flex items-center gap-1 mr-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+                Arquivo
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <input type="file" accept="image/*" onChange={handleFileLoad} className="hidden" ref={fileInputRef} />
+              <DropdownMenuItem
+                  onSelect={(e) => {
+                    // Prevenir o comportamento padrão do DropdownMenuItem que pode fechar o menu
+                    // e permitir que o clique no input de arquivo funcione
+                    e.preventDefault()
+                    triggerFileInput()
+                  }}
+              >
+                Abrir
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onSave}>Salvar</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onClear}>Novo</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
-              Editar
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onSelect={onUndo} disabled={!canUndo}>
-              Desfazer
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onRedo} disabled={!canRedo}>
-              Refazer
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+                Editar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onSelect={onUndo} disabled={!canUndo}>
+                Desfazer
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onRedo} disabled={!canRedo}>
+                Refazer
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
-              Ver
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onSelect={onViewBlack}>Visualizar em Preto</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+                Ver
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onSelect={onViewBlack}>Visualizar em Preto</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
-              Imagem
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onSelect={onSave}>Download</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+                Imagem
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onSelect={onSave}>Download</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
-          Opções
-        </Button>
-        <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
-          Ajuda
-        </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+                Opções
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    onOpenWindowColorPicker()
+                  }}
+              >
+                Cor da Janela
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+            Ajuda
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-1 border-l border-gray-400 pl-2">
+          <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Desfazer (Ctrl+Z)">
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Refazer (Ctrl+Y)">
+            <RotateCw className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClear} title="Limpar Tudo">
+            Limpar
+          </Button>
+        </div>
       </div>
-
-      <div className="flex items-center gap-1 border-l border-gray-400 pl-2">
-        <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Desfazer (Ctrl+Z)">
-          <RotateCcw className="w-4 h-4" />
-        </Button>
-
-        <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Refazer (Ctrl+Y)">
-          <RotateCw className="w-4 h-4" />
-        </Button>
-
-        <Button variant="ghost" size="sm" onClick={onClear} title="Limpar Tudo">
-          Limpar
-        </Button>
-      </div>
-    </div>
   )
 }

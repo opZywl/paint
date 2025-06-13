@@ -13,6 +13,7 @@ export default function AdvancedPaintApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
+  const windowColorInputRef = useRef<HTMLInputElement>(null) // Ref para o input de cor da janela
 
   const [isDrawing, setIsDrawing] = useState(false)
   const [color, setColor] = useState("#000000")
@@ -26,30 +27,73 @@ export default function AdvancedPaintApp() {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
   const [isShapeDrawing, setIsShapeDrawing] = useState(false)
 
+  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#000000") // Padrão preto
+  const [windowTitle, setWindowTitle] = useState("Paint Avançado - sem título")
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [tempTitle, setTempTitle] = useState(windowTitle)
+
   const { saveState, undo, redo, canUndo, canRedo } = useHistory()
 
   useEffect(() => {
     const canvas = canvasRef.current
     const context = canvas?.getContext("2d")
     if (context && canvas) {
-      context.fillStyle = "#FFFFFF"
+      context.fillStyle = "#FFFFFF" // Fundo do canvas sempre branco
       context.fillRect(0, 0, canvas.width, canvas.height)
       saveState(context.getImageData(0, 0, canvas.width, canvas.height))
     }
   }, [saveState])
 
-  // Keyboard shortcuts
+  const handleUndo = useCallback(() => {
+    // Envolver com useCallback
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    if (context && canvas) {
+      const previousState = undo()
+      if (previousState) context.putImageData(previousState, 0, 0)
+    }
+  }, [undo])
+
+  const handleRedo = useCallback(() => {
+    // Envolver com useCallback
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    if (context && canvas) {
+      const nextState = redo()
+      if (nextState) context.putImageData(nextState, 0, 0)
+    }
+  }, [redo])
+
+  const handleSave = useCallback(() => {
+    // Envolver com useCallback
+    const canvas = canvasRef.current
+    if (canvas) {
+      const link = document.createElement("a")
+      link.download = `${windowTitle.replace(/\s+/g, "_") || "painting"}.png`
+      link.href = canvas.toDataURL()
+      link.click()
+    }
+  }, [windowTitle])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditingTitle) {
+        if (e.key === "Enter") {
+          setWindowTitle(tempTitle)
+          setIsEditingTitle(false)
+        } else if (e.key === "Escape") {
+          setTempTitle(windowTitle)
+          setIsEditingTitle(false)
+        }
+        return
+      }
+
       if (e.ctrlKey || e.metaKey) {
         switch (e.key.toLowerCase()) {
           case "z":
             e.preventDefault()
-            if (e.shiftKey) {
-              handleRedo()
-            } else {
-              handleUndo()
-            }
+            if (e.shiftKey) handleRedo()
+            else handleUndo()
             break
           case "y":
             e.preventDefault()
@@ -59,10 +103,13 @@ export default function AdvancedPaintApp() {
             e.preventDefault()
             handleSave()
             break
+          case "o": // Atalho para Abrir
+            e.preventDefault()
+            document.getElementById("file-open-trigger")?.click() // Simula clique no item do menu
+            break
         }
       }
 
-      // Tool shortcuts
       switch (e.key.toLowerCase()) {
         case "b":
           setTool("brush")
@@ -90,10 +137,9 @@ export default function AdvancedPaintApp() {
           break
       }
     }
-
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [])
+  }, [isEditingTitle, tempTitle, windowTitle, handleUndo, handleRedo, handleSave]) // Adicionar dependências
 
   const saveCanvasState = useCallback(() => {
     const canvas = canvasRef.current
@@ -103,57 +149,28 @@ export default function AdvancedPaintApp() {
     }
   }, [saveState])
 
-  const handleUndo = () => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
-      const previousState = undo()
-      if (previousState) {
-        context.putImageData(previousState, 0, 0)
-      }
-    }
-  }
-
-  const handleRedo = () => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext("2d")
-    if (context && canvas) {
-      const nextState = redo()
-      if (nextState) {
-        context.putImageData(nextState, 0, 0)
-      }
-    }
-  }
-
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     const context = canvas?.getContext("2d")
     if (!context || !canvas) return
-
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-
     setStartPos({ x, y })
-
     if (tool === "eyedropper") {
       const pickedColor = getColorAtPoint(context, x, y)
-      const hexColor = rgbToHex(pickedColor)
-      setColor(hexColor)
+      setColor(rgbToHex(pickedColor))
       return
     }
-
     if (tool === "rectangle" || tool === "circle") {
       setIsShapeDrawing(true)
       return
     }
-
     if (tool === "bucket") {
       floodFill(context, Math.floor(x), Math.floor(y), color, canvas)
       saveCanvasState()
       return
     }
-
     context.globalAlpha = opacity
     context.beginPath()
     context.moveTo(x, y)
@@ -165,37 +182,27 @@ export default function AdvancedPaintApp() {
     const overlayCanvas = overlayCanvasRef.current
     const context = canvas?.getContext("2d")
     const overlayContext = overlayCanvas?.getContext("2d")
-
     if (!context || !canvas) return
-
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-
     if (isShapeDrawing && overlayContext && overlayCanvas) {
-      // Clear overlay and draw preview
       overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
       overlayContext.globalAlpha = opacity
-
-      if (tool === "rectangle") {
-        drawRectangle(overlayContext, startPos.x, startPos.y, x, y, color)
-      } else if (tool === "circle") {
+      if (tool === "rectangle") drawRectangle(overlayContext, startPos.x, startPos.y, x, y, color)
+      else if (tool === "circle") {
         const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
         drawCircle(overlayContext, startPos.x, startPos.y, radius, color)
       }
       return
     }
-
     if (!isDrawing) return
-
     context.globalAlpha = opacity
     context.lineTo(x, y)
-
     if (tool === "eraser") {
       context.globalCompositeOperation = "destination-out"
       context.lineWidth = brushSize * 2
     } else if (tool === "spray") {
-      // Spray effect
       for (let i = 0; i < 20; i++) {
         const offsetX = (Math.random() - 0.5) * brushSize * 2
         const offsetY = (Math.random() - 0.5) * brushSize * 2
@@ -208,7 +215,6 @@ export default function AdvancedPaintApp() {
       context.strokeStyle = color
       context.lineWidth = brushSize
     }
-
     context.lineCap = "round"
     context.stroke()
   }
@@ -218,36 +224,20 @@ export default function AdvancedPaintApp() {
     const overlayCanvas = overlayCanvasRef.current
     const context = canvas?.getContext("2d")
     const overlayContext = overlayCanvas?.getContext("2d")
-
     if (isShapeDrawing && context && overlayContext && overlayCanvas) {
-      // Draw the final shape on main canvas
       const imageData = overlayContext.getImageData(0, 0, overlayCanvas.width, overlayCanvas.height)
       context.putImageData(imageData, 0, 0)
       overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
       setIsShapeDrawing(false)
       saveCanvasState()
-    } else if (isDrawing) {
-      saveCanvasState()
-    }
-
+    } else if (isDrawing) saveCanvasState()
     setIsDrawing(false)
-  }
-
-  const handleSave = () => {
-    const canvas = canvasRef.current
-    if (canvas) {
-      const link = document.createElement("a")
-      link.download = "painting.png"
-      link.href = canvas.toDataURL()
-      link.click()
-    }
   }
 
   const handleLoad = (file: File) => {
     const canvas = canvasRef.current
     const context = canvas?.getContext("2d")
     if (!context || !canvas) return
-
     const img = new Image()
     img.onload = () => {
       context.clearRect(0, 0, canvas.width, canvas.height)
@@ -255,6 +245,8 @@ export default function AdvancedPaintApp() {
       context.fillRect(0, 0, canvas.width, canvas.height)
       context.drawImage(img, 0, 0)
       saveCanvasState()
+      setWindowTitle(`Paint Avançado - ${file.name}`)
+      setTempTitle(`Paint Avançado - ${file.name}`)
     }
     img.src = URL.createObjectURL(file)
   }
@@ -266,6 +258,8 @@ export default function AdvancedPaintApp() {
       context.fillStyle = "#FFFFFF"
       context.fillRect(0, 0, canvas.width, canvas.height)
       saveCanvasState()
+      setWindowTitle("Paint Avançado - sem título")
+      setTempTitle("Paint Avançado - sem título")
     }
   }
 
@@ -275,28 +269,20 @@ export default function AdvancedPaintApp() {
     }
   }
 
-  // Adicione esta função após a função addCustomColor
   const viewBlack = () => {
     const canvas = canvasRef.current
     const context = canvas?.getContext("2d")
     if (context && canvas) {
-      // Salvar o estado atual antes de aplicar o filtro
       const currentState = context.getImageData(0, 0, canvas.width, canvas.height)
-
-      // Aplicar filtro preto
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
       const data = imageData.data
-
       for (let i = 0; i < data.length; i += 4) {
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-        data[i] = avg < 128 ? 0 : 255 // R
-        data[i + 1] = avg < 128 ? 0 : 255 // G
-        data[i + 2] = avg < 128 ? 0 : 255 // B
+        data[i] = avg < 128 ? 0 : 255
+        data[i + 1] = avg < 128 ? 0 : 255
+        data[i + 2] = avg < 128 ? 0 : 255
       }
-
       context.putImageData(imageData, 0, 0)
-
-      // Restaurar após 2 segundos
       setTimeout(() => {
         context.putImageData(currentState, 0, 0)
       }, 2000)
@@ -304,6 +290,7 @@ export default function AdvancedPaintApp() {
   }
 
   const startDragging = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isEditingTitle) return // Não arrastar se estiver editando título
     setDragging(true)
     setPosition({
       x: e.clientX - (containerRef.current?.offsetLeft || 0),
@@ -321,103 +308,145 @@ export default function AdvancedPaintApp() {
       }
     }
   }
+  const stopDragging = () => setDragging(false)
 
-  const stopDragging = () => {
-    setDragging(false)
+  const handleTitleDoubleClick = () => {
+    setTempTitle(windowTitle)
+    setIsEditingTitle(true)
+  }
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTempTitle(e.target.value)
+  }
+
+  const handleTitleBlur = () => {
+    setWindowTitle(tempTitle)
+    setIsEditingTitle(false)
+  }
+
+  const openWindowColorPicker = () => {
+    windowColorInputRef.current?.click()
   }
 
   return (
-    <div className="h-screen bg-teal-600 overflow-hidden">
-      <div
-        ref={containerRef}
-        className="absolute bg-gray-200 border-2 border-white shadow-lg"
-        style={{ width: "900px", left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}
-      >
-        {/* Title Bar */}
+      <div className="h-screen bg-teal-600 overflow-hidden">
         <div
-          className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center cursor-move"
-          onMouseDown={startDragging}
-          onMouseMove={onDrag}
-          onMouseUp={stopDragging}
-          onMouseLeave={stopDragging}
+            ref={containerRef}
+            className="absolute border-2 border-white shadow-lg"
+            style={{
+              width: "900px",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              backgroundColor: windowBackgroundColor, // Aplicar cor de fundo da janela
+            }}
         >
-          <span>Paint Avançado - sem título</span>
-          <div className="flex gap-1">
-            <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-              _
-            </Button>
-            <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-              □
-            </Button>
-            <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-              ×
-            </Button>
+          <input
+              type="color"
+              ref={windowColorInputRef}
+              className="hidden"
+              value={windowBackgroundColor}
+              onChange={(e) => setWindowBackgroundColor(e.target.value)}
+          />
+          <div
+              className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center cursor-move"
+              onMouseDown={startDragging}
+              onMouseMove={onDrag}
+              onMouseUp={stopDragging}
+              onMouseLeave={stopDragging}
+          >
+            {isEditingTitle ? (
+                <input
+                    type="text"
+                    value={tempTitle}
+                    onChange={handleTitleChange}
+                    onBlur={handleTitleBlur}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleTitleBlur()
+                      if (e.key === "Escape") {
+                        setTempTitle(windowTitle)
+                        setIsEditingTitle(false)
+                      }
+                    }}
+                    className="bg-blue-800 text-white px-1 flex-grow"
+                    autoFocus
+                />
+            ) : (
+                <span onDoubleClick={handleTitleDoubleClick} className="flex-grow">
+              {windowTitle}
+            </span>
+            )}
+            <div className="flex gap-1">
+              <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                _
+              </Button>
+              <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                □
+              </Button>
+              <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                ×
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {/* Menu Bar */}
-        <MenuBar
-          onSave={handleSave}
-          onLoad={handleLoad}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          onClear={handleClear}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onViewBlack={viewBlack}
-        />
-
-        <div className="flex">
-          {/* Tool Panel */}
-          <ToolPanel
-            selectedTool={tool}
-            onToolChange={setTool}
-            brushSize={brushSize}
-            onBrushSizeChange={setBrushSize}
-            opacity={opacity}
-            onOpacityChange={setOpacity}
+          <MenuBar
+              onSave={handleSave}
+              onLoad={handleLoad}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onClear={handleClear}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onViewBlack={viewBlack}
+              onOpenWindowColorPicker={openWindowColorPicker} // Passar a nova função
           />
 
-          {/* Canvas Area */}
-          <div
-            className="flex-grow relative border border-gray-400"
-            style={{ width: "800px", height: "500px", overflow: "auto" }}
-          >
-            <canvas
-              ref={canvasRef}
-              width={1200}
-              height={800}
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseOut={stopDrawing}
-              className="absolute top-0 left-0 cursor-crosshair"
+          <div className="flex">
+            <ToolPanel
+                selectedTool={tool}
+                onToolChange={setTool}
+                brushSize={brushSize}
+                onBrushSizeChange={setBrushSize}
+                opacity={opacity}
+                onOpacityChange={setOpacity}
             />
-            <canvas
-              ref={overlayCanvasRef}
-              width={1200}
-              height={800}
-              className="absolute top-0 left-0 pointer-events-none"
-            />
+            <div
+                className="flex-grow relative border border-gray-400"
+                style={{ width: "800px", height: "500px", overflow: "auto" }}
+            >
+              <canvas
+                  ref={canvasRef}
+                  width={1200}
+                  height={800}
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseOut={stopDrawing}
+                  className="absolute top-0 left-0 cursor-crosshair bg-white" // Canvas sempre com fundo branco
+              />
+              <canvas
+                  ref={overlayCanvasRef}
+                  width={1200}
+                  height={800}
+                  className="absolute top-0 left-0 pointer-events-none"
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Color Picker */}
-        <ColorPicker
-          selectedColor={color}
-          onColorChange={setColor}
-          customColors={customColors}
-          onAddCustomColor={addCustomColor}
-        />
+          <ColorPicker
+              selectedColor={color}
+              onColorChange={setColor}
+              customColors={customColors}
+              onAddCustomColor={addCustomColor}
+          />
 
-        {/* Status Bar */}
-        <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between">
+          <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between">
           <span>
             Ferramenta: {tool} | Tamanho: {brushSize}px | Opacidade: {Math.round(opacity * 100)}%
           </span>
-          <span>Use atalhos: B(pincel), E(borracha), R(retângulo), C(círculo), Ctrl+Z(desfazer)</span>
+            <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer</span>
+          </div>
         </div>
       </div>
-    </div>
   )
 }
