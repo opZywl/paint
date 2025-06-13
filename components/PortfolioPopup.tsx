@@ -16,13 +16,13 @@ export function PortfolioPopup() {
             {!isOpen && (
                 <button
                     onClick={togglePopup}
-                    className="fixed bottom-4 right-4 z-50 bg-black rounded-full p-3 shadow-lg hover:bg-gray-800 transition-colors" // Cor alterada para bg-black, posicionamento ajustado
+                    className="fixed bottom-2 right-2 z-50 bg-black rounded-full p-3 shadow-lg hover:bg-gray-800 transition-colors" // Posicionamento ajustado para o canto
                     aria-label="Abrir informações do desenvolvedor"
                 >
                     <User className="h-6 w-6 text-white" />
                     <span
                         className={`absolute top-0 right-0 block h-3.5 w-3.5 rounded-full bg-green-500 ring-2 ring-black ${
-                            !isOpen ? "animate-pulse" : "" // Animação de piscar quando fechado
+                            !isOpen ? "animate-pulse" : ""
                         }`}
                     />
                 </button>
@@ -30,9 +30,9 @@ export function PortfolioPopup() {
 
             {/* Popup */}
             {isOpen && (
-                <div className="fixed bottom-4 right-4 z-50 w-72 bg-black text-white rounded-lg shadow-xl border border-gray-800 transform translate-y-0 opacity-100 transition-all duration-300 ease-out">
-                    {/* Ajuste para aparecer acima do botão flutuante se necessário, ou ajustar a posição inicial */}
-                    {/* Exemplo: bottom-20 right-4 se o botão estiver em bottom-4 right-4 */}
+                // Posiciona o canto inferior direito do popup no canto inferior direito da tela
+                // O popup se expandirá para cima e para a esquerda a partir deste ponto.
+                <div className="fixed bottom-2 right-2 z-50 w-72 bg-black text-white rounded-lg shadow-xl border border-gray-800 transform translate-y-0 opacity-100 transition-all duration-300 ease-out">
                     <div className="p-4">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center space-x-3">

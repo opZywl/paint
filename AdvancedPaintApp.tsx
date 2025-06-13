@@ -26,14 +26,14 @@ export default function AdvancedPaintApp() {
   const [isDrawing, setIsDrawing] = useState(false)
   const [color, setColor] = useState("#000000")
   const [tool, setTool] = useState("brush")
-  const [brushSize, setBrushSize] = useState(10) // Aumentado para texto
+  const [brushSize, setBrushSize] = useState(10)
   const [opacity, setOpacity] = useState(1)
   const [customColors, setCustomColors] = useState<string[]>([])
 
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
-  const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 }) // Para preview de formas e seleção
+  const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 })
   const [isShapeDrawing, setIsShapeDrawing] = useState(false)
 
   const [windowBackgroundColor, setWindowBackgroundColor] = useState("#000000")
@@ -43,7 +43,6 @@ export default function AdvancedPaintApp() {
 
   const { saveState, undo, redo, canUndo, canRedo } = useHistory()
 
-  // Estados para ferramenta de Seleção
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null)
   const [selectedImageData, setSelectedImageData] = useState<ImageData | null>(null)
@@ -53,12 +52,10 @@ export default function AdvancedPaintApp() {
   const getMainContext = useCallback(() => canvasRef.current?.getContext("2d") || null, [])
   const getOverlayContext = useCallback(() => overlayCanvasRef.current?.getContext("2d") || null, [])
 
-  useEffect(() => {
-    const context = getMainContext()
-    if (context && canvasRef.current) {
-      context.fillStyle = "#FFFFFF"
-      context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      saveState(context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
+  const saveCanvasState = useCallback(() => {
+    const mainCtx = getMainContext()
+    if (mainCtx && canvasRef.current) {
+      saveState(mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
     }
   }, [saveState, getMainContext])
 
@@ -70,15 +67,8 @@ export default function AdvancedPaintApp() {
           saveCanvasState()
         }
       },
-      [getMainContext, saveState], // saveCanvasState é definida depois, mas saveState é estável
+      [getMainContext, saveCanvasState],
   )
-
-  const saveCanvasState = useCallback(() => {
-    const mainCtx = getMainContext()
-    if (mainCtx && canvasRef.current) {
-      saveState(mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
-    }
-  }, [saveState, getMainContext])
 
   const handleUndo = useCallback(() => {
     const mainCtx = getMainContext()
@@ -104,6 +94,50 @@ export default function AdvancedPaintApp() {
       link.click()
     }
   }, [windowTitle])
+
+  const clearSelection = useCallback(
+      (save = true) => {
+        setIsSelecting(false)
+        setSelectionRect(null)
+        setSelectedImageData(null)
+        setIsMovingSelection(false)
+        const overlayCtx = getOverlayContext()
+        overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+        if (save) saveCanvasState()
+      },
+      [getOverlayContext, saveCanvasState],
+  )
+
+  const finalizeSelectionMove = useCallback(() => {
+    const mainCtx = getMainContext()
+    const overlayCtx = getOverlayContext()
+    if (mainCtx && overlayCtx && selectedImageData && selectionRect && isMovingSelection) {
+      mainCtx.fillStyle = "#FFFFFF" // Clear the original area
+      mainCtx.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
+      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y) // Draw moved image
+      saveCanvasState()
+    }
+    clearSelection(false) // Clear selection state without saving again
+    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height) // Clear overlay
+  }, [
+    getMainContext,
+    getOverlayContext,
+    selectedImageData,
+    selectionRect,
+    currentPos,
+    saveCanvasState,
+    isMovingSelection,
+    clearSelection, // Added clearSelection as a dependency
+  ])
+
+  useEffect(() => {
+    const context = getMainContext()
+    if (context && canvasRef.current) {
+      context.fillStyle = "#FFFFFF"
+      context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      saveState(context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
+    }
+  }, [saveState, getMainContext])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -134,7 +168,16 @@ export default function AdvancedPaintApp() {
             break
           case "o":
             e.preventDefault()
-            document.getElementById("file-open-trigger")?.click()
+            const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null
+            // This relies on MenuBar having such an input. A more robust way would be to pass a trigger function.
+            if (fileInput && fileInput.parentElement?.classList.contains("hidden")) {
+              // Check if it's the hidden one from MenuBar
+              const clickableParent = fileInput.closest("button") || fileInput.closest('[role="menuitem"]')
+              ;(clickableParent as HTMLElement)?.click()
+            } else {
+              // Fallback or specific ID if MenuBar's input is identifiable
+              ;(document.getElementById("file-open-trigger-in-menubar") as HTMLElement)?.click()
+            }
             break
         }
       }
@@ -157,16 +200,16 @@ export default function AdvancedPaintApp() {
         case "i":
           setTool("eyedropper")
           break
-        case "p":
+        case "p": // Assuming 'p' is for spray, not 's'
           setTool("spray")
           break
-        case "v": // 'v' para seleção (move tool)
+        case "v":
           if (!e.ctrlKey && !e.metaKey) {
             setTool("select")
-            finalizeSelectionMove() // Finaliza seleção anterior se houver
+            if (isMovingSelection || selectionRect) finalizeSelectionMove()
           }
           break
-        case "escape": // Esc para cancelar seleção
+        case "escape":
           if (tool === "select" && (selectionRect || isSelecting || isMovingSelection)) {
             clearSelection()
           }
@@ -186,42 +229,10 @@ export default function AdvancedPaintApp() {
     selectionRect,
     isSelecting,
     isMovingSelection,
+    finalizeSelectionMove,
+    clearSelection,
   ])
 
-  const finalizeSelectionMove = useCallback(() => {
-    const mainCtx = getMainContext()
-    const overlayCtx = getOverlayContext()
-    if (mainCtx && overlayCtx && selectedImageData && selectionRect && isMovingSelection) {
-      // Limpar a área original no canvas principal (preencher com branco)
-      mainCtx.fillStyle = "#FFFFFF"
-      mainCtx.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
-      // Desenhar a imagem movida no canvas principal
-      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y)
-      saveCanvasState()
-    }
-    clearSelection(false) // Não salva estado aqui, já salvou acima
-    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
-  }, [
-    getMainContext,
-    getOverlayContext,
-    selectedImageData,
-    selectionRect,
-    currentPos,
-    saveCanvasState,
-    isMovingSelection,
-  ])
-
-  const clearSelection = (save = true) => {
-    setIsSelecting(false)
-    setSelectionRect(null)
-    setSelectedImageData(null)
-    setIsMovingSelection(false)
-    const overlayCtx = getOverlayContext()
-    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
-    if (save) saveCanvasState()
-  }
-
-  // Mudar ferramenta também finaliza seleção
   useEffect(() => {
     if (tool !== "select" && (selectionRect || isMovingSelection)) {
       finalizeSelectionMove()
@@ -247,9 +258,7 @@ export default function AdvancedPaintApp() {
           y >= selectionRect.y &&
           y <= selectionRect.y + selectionRect.height
       ) {
-        // Clicou dentro de uma seleção existente, iniciar movimento
         if (!selectedImageData) {
-          // Capturar imagem se ainda não foi
           const imageData = mainCtx.getImageData(
               selectionRect.x,
               selectionRect.y,
@@ -259,10 +268,9 @@ export default function AdvancedPaintApp() {
           setSelectedImageData(imageData)
         }
         setIsMovingSelection(true)
-        setSelectionMoveStart({ x: x - selectionRect.x, y: y - selectionRect.y }) // Posição do clique relativa ao canto da seleção
+        setSelectionMoveStart({ x: x - selectionRect.x, y: y - selectionRect.y })
       } else {
-        // Clicou fora, finalizar seleção anterior e iniciar nova
-        finalizeSelectionMove()
+        if (selectionRect || isMovingSelection) finalizeSelectionMove() // Finalize previous before starting new
         setIsSelecting(true)
       }
       return
@@ -272,11 +280,11 @@ export default function AdvancedPaintApp() {
       const text = prompt("Digite o texto:")
       if (text) {
         applyOperationToMainCanvas((ctx) => {
-          ctx.font = `${brushSize * 2}px Arial` // Usar brushSize para tamanho da fonte
+          ctx.font = `${brushSize * 2}px Arial`
           ctx.fillStyle = color
           ctx.globalAlpha = opacity
           ctx.fillText(text, x, y)
-          ctx.globalAlpha = 1 // Resetar alpha
+          ctx.globalAlpha = 1
         })
       }
       return
@@ -312,31 +320,27 @@ export default function AdvancedPaintApp() {
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
 
-    overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height) // Limpar overlay a cada frame de desenho
+    overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
 
     if (tool === "select") {
       if (isSelecting) {
-        // Desenhando o retângulo de seleção
         const width = x - startPos.x
         const height = y - startPos.y
         overlayCtx.setLineDash([4, 2])
         overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
         overlayCtx.strokeRect(startPos.x, startPos.y, width, height)
         overlayCtx.setLineDash([])
-        setCurrentPos({ x, y }) // Atualiza currentPos para o fim da seleção
+        setCurrentPos({ x, y })
       } else if (isMovingSelection && selectedImageData && selectionRect) {
-        // Movendo a seleção
         const newX = x - selectionMoveStart.x
         const newY = y - selectionMoveStart.y
         overlayCtx.putImageData(selectedImageData, newX, newY)
-        // Desenhar contorno da área movida
         overlayCtx.setLineDash([4, 2])
         overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
         overlayCtx.strokeRect(newX, newY, selectionRect.width, selectionRect.height)
         overlayCtx.setLineDash([])
-        setCurrentPos({ x: newX, y: newY }) // Atualiza currentPos para a posição da seleção movida
+        setCurrentPos({ x: newX, y: newY })
       } else if (selectionRect) {
-        // Apenas mostrar o contorno da seleção existente se não estiver movendo
         overlayCtx.setLineDash([4, 2])
         overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
         overlayCtx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
@@ -345,7 +349,7 @@ export default function AdvancedPaintApp() {
       return
     }
 
-    setCurrentPos({ x, y }) // Atualizar currentPos para outras ferramentas
+    setCurrentPos({ x, y })
 
     if (isShapeDrawing) {
       overlayCtx.globalAlpha = opacity
@@ -371,7 +375,7 @@ export default function AdvancedPaintApp() {
         mainCtx.fillStyle = color
         mainCtx.fillRect(x + offsetX, y + offsetY, 1, 1)
       }
-      return // Spray não usa stroke
+      return
     } else {
       mainCtx.globalCompositeOperation = "source-over"
       mainCtx.strokeStyle = color
@@ -388,7 +392,6 @@ export default function AdvancedPaintApp() {
 
     if (tool === "select") {
       if (isSelecting) {
-        // Finalizar definição do retângulo de seleção
         const selX = Math.min(startPos.x, currentPos.x)
         const selY = Math.min(startPos.y, currentPos.y)
         const selWidth = Math.abs(currentPos.x - startPos.x)
@@ -399,38 +402,32 @@ export default function AdvancedPaintApp() {
           const imageData = mainCtx.getImageData(selX, selY, selWidth, selHeight)
           setSelectedImageData(imageData)
         } else {
-          clearSelection(false) // Não salvar se a seleção for inválida
+          clearSelection(false)
         }
         setIsSelecting(false)
-      } else if (isMovingSelection) {
-        // Não finalizar aqui, finalizeSelectionMove() cuida disso ao clicar fora ou mudar de ferramenta
-        // Apenas para o estado de arrastar
-        // setIsMovingSelection(false); // Não definir como false aqui, pois o usuário pode continuar movendo
       }
-      // Não salvar estado aqui para seleção, o estado é salvo ao aplicar a movimentação
+      // Do not call finalizeSelectionMove here, it's called on next click, tool change, or Esc.
       return
     }
 
     if (isShapeDrawing) {
-      // Desenhar a forma final no canvas principal
       mainCtx.globalAlpha = opacity
       if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color)
       else if (tool === "circle") {
         const radius = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2))
         drawCircle(mainCtx, startPos.x, startPos.y, radius, color)
       }
-      mainCtx.globalAlpha = 1 // Resetar alpha
+      mainCtx.globalAlpha = 1
       saveCanvasState()
     } else if (isDrawing) {
-      // Para pincel, borracha, spray
-      mainCtx.beginPath() // Necessário para que o próximo stroke não continue o anterior
+      mainCtx.beginPath() // End current path for brush/eraser
       saveCanvasState()
     }
 
     overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
     setIsDrawing(false)
     setIsShapeDrawing(false)
-    mainCtx.globalCompositeOperation = "source-over" // Resetar composite operation
+    mainCtx.globalCompositeOperation = "source-over"
   }
 
   const handleLoad = (file: File) => {
@@ -463,7 +460,7 @@ export default function AdvancedPaintApp() {
 
   const addCustomColor = (newColor: string) => {
     if (!customColors.includes(newColor)) {
-      setCustomColors((prev) => [...prev.slice(-7), newColor])
+      setCustomColors((prev) => [...prev.slice(-7), newColor]) // Keep last 7 + new one
     }
   }
 
@@ -518,128 +515,128 @@ export default function AdvancedPaintApp() {
   const openWindowColorPicker = () => windowColorInputRef.current?.click()
 
   return (
-      <div className="h-screen bg-teal-600 overflow-hidden select-none">
-        <div
-            ref={containerRef}
-            className="absolute border-2 border-white shadow-lg"
-            style={{
-              width: "900px",
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              backgroundColor: windowBackgroundColor,
-            }}
-        >
-          <input
-              type="color"
-              ref={windowColorInputRef}
-              className="hidden"
-              value={windowBackgroundColor}
-              onChange={(e) => setWindowBackgroundColor(e.target.value)}
-          />
+      <>
+        <div className="h-screen bg-teal-600 overflow-hidden select-none">
           <div
-              className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center cursor-move"
-              onMouseDown={startDraggingWindow}
-              onMouseMove={onDragWindow}
-              onMouseUp={stopDraggingWindow}
-              onMouseLeave={stopDraggingWindow}
+              ref={containerRef}
+              className="absolute border-2 border-white shadow-lg"
+              style={{
+                width: "900px",
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%, -50%)",
+                backgroundColor: windowBackgroundColor,
+              }}
           >
-            {isEditingTitle ? (
-                <input
-                    type="text"
-                    value={tempTitle}
-                    onChange={handleTitleChange}
-                    onBlur={handleTitleBlur}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleTitleBlur()
-                      if (e.key === "Escape") {
-                        setTempTitle(windowTitle)
-                        setIsEditingTitle(false)
-                      }
-                    }}
-                    className="bg-blue-800 text-white px-1 flex-grow"
-                    autoFocus
-                />
-            ) : (
-                <span onDoubleClick={handleTitleDoubleClick} className="flex-grow">
-              {windowTitle}
-            </span>
-            )}
-            <div className="flex gap-1">
-              <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                _
-              </Button>
-              <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                □
-              </Button>
-              <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                ×
-              </Button>
-            </div>
-          </div>
-          <MenuBar
-              onSave={handleSave}
-              onLoad={handleLoad}
-              onUndo={handleUndo}
-              onRedo={handleRedo}
-              onClear={handleClear}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              onViewBlack={viewBlack}
-              onOpenWindowColorPicker={openWindowColorPicker}
-          />
-          <div className="flex">
-            <ToolPanel
-                selectedTool={tool}
-                onToolChange={setTool}
-                brushSize={brushSize}
-                onBrushSizeChange={setBrushSize}
-                opacity={opacity}
-                onOpacityChange={setOpacity}
+            <input
+                type="color"
+                ref={windowColorInputRef}
+                className="hidden"
+                value={windowBackgroundColor}
+                onChange={(e) => setWindowBackgroundColor(e.target.value)}
             />
             <div
-                className="flex-grow relative border border-gray-400"
-                style={{ width: "800px", height: "500px", overflow: "hidden" }}
+                className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center cursor-move"
+                onMouseDown={startDraggingWindow}
+                onMouseMove={onDragWindow}
+                onMouseUp={stopDraggingWindow}
+                onMouseLeave={stopDraggingWindow}
             >
-              {" "}
-              {/* Overflow hidden para canvas */}
-              <canvas
-                  ref={canvasRef}
-                  width={1200}
-                  height={800}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseOut={stopDrawing}
-                  className="absolute top-0 left-0 cursor-crosshair bg-white"
+              {isEditingTitle ? (
+                  <input
+                      type="text"
+                      value={tempTitle}
+                      onChange={handleTitleChange}
+                      onBlur={handleTitleBlur}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleTitleBlur()
+                        if (e.key === "Escape") {
+                          setTempTitle(windowTitle)
+                          setIsEditingTitle(false)
+                        }
+                      }}
+                      className="bg-blue-800 text-white px-1 flex-grow"
+                      autoFocus
+                  />
+              ) : (
+                  <span onDoubleClick={handleTitleDoubleClick} className="flex-grow">
+                {windowTitle}
+              </span>
+              )}
+              <div className="flex gap-1">
+                <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                  _
+                </Button>
+                <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                  □
+                </Button>
+                <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                  ×
+                </Button>
+              </div>
+            </div>
+            <MenuBar
+                onSave={handleSave}
+                onLoad={handleLoad}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                onClear={handleClear}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onViewBlack={viewBlack}
+                onOpenWindowColorPicker={openWindowColorPicker}
+            />
+            <div className="flex">
+              <ToolPanel
+                  selectedTool={tool}
+                  onToolChange={setTool}
+                  brushSize={brushSize}
+                  onBrushSizeChange={setBrushSize}
+                  opacity={opacity}
+                  onOpacityChange={setOpacity}
               />
-              <canvas
-                  ref={overlayCanvasRef}
-                  width={1200}
-                  height={800}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseOut={stopDrawing}
-                  className="absolute top-0 left-0 pointer-events-none"
-                  style={{ cursor: tool === "select" && selectionRect ? "move" : "crosshair" }}
-              />
+              <div
+                  className="flex-grow relative border border-gray-400"
+                  style={{ width: "800px", height: "500px", overflow: "hidden" }}
+              >
+                <canvas
+                    ref={canvasRef}
+                    width={1200}
+                    height={800}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseOut={stopDrawing}
+                    className="absolute top-0 left-0 cursor-crosshair bg-white"
+                />
+                <canvas
+                    ref={overlayCanvasRef}
+                    width={1200}
+                    height={800}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseOut={stopDrawing}
+                    className="absolute top-0 left-0 pointer-events-none"
+                    style={{ cursor: tool === "select" && (isMovingSelection || selectionRect) ? "move" : "crosshair" }}
+                />
+              </div>
+            </div>
+            <ColorPicker
+                selectedColor={color}
+                onColorChange={setColor}
+                customColors={customColors}
+                onAddCustomColor={addCustomColor}
+            />
+            <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between">
+            <span>
+              Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
+            </span>
+              <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção</span>
             </div>
           </div>
-          <ColorPicker
-              selectedColor={color}
-              onColorChange={setColor}
-              customColors={customColors}
-              onAddCustomColor={addCustomColor}
-          />
-          <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between">
-          <span>
-            Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
-          </span>
-            <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção</span>
-          </div>
-          <PortfolioPopup />
         </div>
-      </div>
+        <PortfolioPopup />
+      </>
   )
 }
