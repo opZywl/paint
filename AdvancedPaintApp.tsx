@@ -26,6 +26,33 @@ interface OriginalWindowState {
   transform: string
 }
 
+const getContrastYIQUtil = (hexcolor: string): "black" | "white" => {
+  if (
+      !hexcolor ||
+      !hexcolor.startsWith("#") ||
+      (hexcolor.length !== 4 && hexcolor.length !== 7 && hexcolor.length !== 9)
+  ) {
+    return "white"
+  }
+  let R, G, B
+  if (hexcolor.length === 4) {
+    R = Number.parseInt(hexcolor[1] + hexcolor[1], 16)
+    G = Number.parseInt(hexcolor[2] + hexcolor[2], 16)
+    B = Number.parseInt(hexcolor[3] + hexcolor[3], 16)
+  } else {
+    // #RRGGBB or #RRGGBBAA
+    R = Number.parseInt(hexcolor.substring(1, 3), 16)
+    G = Number.parseInt(hexcolor.substring(3, 5), 16)
+    B = Number.parseInt(hexcolor.substring(5, 7), 16)
+  }
+
+  if (isNaN(R) || isNaN(G) || isNaN(B)) {
+    return "white" // Default for invalid parsed colors
+  }
+  const yiq = (R * 299 + G * 587 + B * 114) / 1000
+  return yiq >= 128 ? "black" : "white"
+}
+
 export default function AdvancedPaintApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -49,7 +76,7 @@ export default function AdvancedPaintApp() {
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 })
   const [isShapeDrawing, setIsShapeDrawing] = useState(false)
 
-  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#FFFFFF")
+  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#1E3A8A") // Default to classic blue
   const [pageBackgroundColor, setPageBackgroundColor] = useState("#0D9488")
   const [windowTitle, setWindowTitle] = useState("Paint Avançado - sem título")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -65,6 +92,9 @@ export default function AdvancedPaintApp() {
   const [selectedImageData, setSelectedImageData] = useState<ImageData | null>(null)
   const [isMovingSelection, setIsMovingSelection] = useState(false)
   const [selectionMoveStart, setSelectionMoveStart] = useState({ x: 0, y: 0 })
+
+  const titleBarTextColor = getContrastYIQUtil(windowBackgroundColor)
+  const titleBarButtonHoverClass = titleBarTextColor === "white" ? "hover:bg-white/20" : "hover:bg-black/10"
 
   const getMainContext = useCallback(() => canvasRef.current?.getContext("2d") || null, [])
   const getOverlayContext = useCallback(() => overlayCanvasRef.current?.getContext("2d") || null, [])
@@ -607,15 +637,8 @@ export default function AdvancedPaintApp() {
     if (tool !== "select") {
       if (selectionRect || isMovingSelection) {
         finalizeSelectionMove()
-
         setSelectionRect(null)
       }
-    }
-  }, [tool, selectionRect, isMovingSelection, finalizeSelectionMove])
-
-  useEffect(() => {
-    if (tool !== "select" && (selectionRect || isMovingSelection)) {
-      finalizeSelectionMove()
     }
   }, [tool, selectionRect, isMovingSelection, finalizeSelectionMove])
 
@@ -726,7 +749,7 @@ export default function AdvancedPaintApp() {
         <input
             type="color"
             ref={pageBgColorInputRef}
-            className="hidden"
+            className="sr-only"
             value={pageBackgroundColor}
             onChange={(e) => setPageBackgroundColor(e.target.value)}
         />
@@ -735,14 +758,18 @@ export default function AdvancedPaintApp() {
             <input
                 type="color"
                 ref={windowColorInputRef}
-                className="hidden"
+                className="sr-only"
                 value={windowBackgroundColor}
                 onChange={(e) => setWindowBackgroundColor(e.target.value)}
             />
             {!isMobile && (
                 <div
-                    className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center shrink-0"
-                    style={{ cursor: isMaximized ? "default" : "move" }}
+                    className="px-2 py-1 flex justify-between items-center shrink-0"
+                    style={{
+                      backgroundColor: windowBackgroundColor,
+                      color: titleBarTextColor,
+                      cursor: isMaximized ? "default" : "move",
+                    }}
                     onMouseDown={startDraggingWindow}
                     onMouseMove={onDragWindow}
                     onMouseUp={stopDraggingWindow}
@@ -761,26 +788,46 @@ export default function AdvancedPaintApp() {
                               setIsEditingTitle(false)
                             }
                           }}
-                          className="bg-blue-800 text-white px-1 flex-grow"
+                          className="px-1 flex-grow"
+                          style={{
+                            backgroundColor: "transparent",
+                            color: titleBarTextColor,
+                            borderBottom: `1px solid ${titleBarTextColor === "white" ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"}`,
+                          }}
                           autoFocus
                       />
                   ) : (
-                      <span onDoubleClick={handleTitleDoubleClick} className="flex-grow">
+                      <span onDoubleClick={handleTitleDoubleClick} className="flex-grow select-none">
                   {windowTitle}
                 </span>
                   )}
                   <div className="flex gap-1">
-                    <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                    <Button
+                        variant="ghost"
+                        className={`h-5 w-5 p-0 min-w-0 ${titleBarButtonHoverClass}`}
+                        style={{ color: titleBarTextColor }}
+                        onClick={() => {
+                          if (isMaximized) {
+                            handleToggleMaximize()
+                          }
+                        }}
+                    >
                       <Minus className="h-3 w-3" />
                     </Button>
                     <Button
                         variant="ghost"
-                        className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700"
+                        className={`h-5 w-5 p-0 min-w-0 ${titleBarButtonHoverClass}`}
+                        style={{ color: titleBarTextColor }}
                         onClick={handleToggleMaximize}
                     >
                       {isMaximized ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
                     </Button>
-                    <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                    <Button
+                        variant="ghost"
+                        className={`h-5 w-5 p-0 min-w-0 ${titleBarButtonHoverClass}`}
+                        style={{ color: titleBarTextColor }}
+                        // onClick={() => { /* Close action if needed */ }}
+                    >
                       <X className="h-3 w-3" />
                     </Button>
                   </div>
