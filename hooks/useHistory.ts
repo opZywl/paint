@@ -7,37 +7,48 @@ export function useHistory() {
   const [currentIndex, setCurrentIndex] = useState(-1)
 
   const saveState = useCallback(
-    (imageData: ImageData) => {
-      setHistory((prev) => {
-        const newHistory = prev.slice(0, currentIndex + 1)
-        newHistory.push(imageData)
-        if (newHistory.length > 50) {
-          // Limit history to 50 states
-          newHistory.shift()
-          return newHistory
-        }
-        return newHistory
-      })
-      setCurrentIndex((prev) => Math.min(prev + 1, 49))
-    },
-    [currentIndex],
+      (imageData: ImageData) => {
+        setHistory((prevHistory) => {
+          const newHistoryUncapped = prevHistory.slice(0, currentIndex + 1)
+          newHistoryUncapped.push(imageData)
+
+          const newHistoryCapped =
+              newHistoryUncapped.length > 50 ? newHistoryUncapped.slice(newHistoryUncapped.length - 50) : newHistoryUncapped
+
+          setCurrentIndex(newHistoryCapped.length - 1)
+          return newHistoryCapped
+        })
+      },
+      [currentIndex],
   )
 
-  const undo = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1)
-      return history[currentIndex - 1]
-    }
-    return null
-  }, [currentIndex, history])
+  const undo = useCallback(
+      (callback: (imageData: ImageData) => void) => {
+        if (currentIndex > 0) {
+          const newIndex = currentIndex - 1
+          const imageDataToRestore = history[newIndex]
+          if (imageDataToRestore) {
+            setCurrentIndex(newIndex)
+            callback(imageDataToRestore)
+          }
+        }
+      },
+      [currentIndex, history],
+  ) // callback is a parameter, not a dependency of this useCallback
 
-  const redo = useCallback(() => {
-    if (currentIndex < history.length - 1) {
-      setCurrentIndex((prev) => prev + 1)
-      return history[currentIndex + 1]
-    }
-    return null
-  }, [currentIndex, history])
+  const redo = useCallback(
+      (callback: (imageData: ImageData) => void) => {
+        if (currentIndex < history.length - 1) {
+          const newIndex = currentIndex + 1
+          const imageDataToRestore = history[newIndex]
+          if (imageDataToRestore) {
+            setCurrentIndex(newIndex)
+            callback(imageDataToRestore)
+          }
+        }
+      },
+      [currentIndex, history],
+  ) // callback is a parameter, not a dependency of this useCallback
 
   const canUndo = currentIndex > 0
   const canRedo = currentIndex < history.length - 1

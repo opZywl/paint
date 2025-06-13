@@ -10,6 +10,7 @@ import { useHistory } from "./hooks/useHistory"
 import { drawRectangle, drawCircle, floodFill, getColorAtPoint, rgbToHex } from "./utils/canvasUtils"
 import { PortfolioPopup } from "./components/PortfolioPopup"
 import { Maximize2, Minimize2, Minus, X } from "lucide-react"
+import { useMobile } from "./hooks/use-mobile"
 
 interface SelectionRect {
   x: number
@@ -33,6 +34,8 @@ export default function AdvancedPaintApp() {
   const windowColorInputRef = useRef<HTMLInputElement>(null)
   const pageBgColorInputRef = useRef<HTMLInputElement>(null)
 
+  const isMobile = useMobile()
+
   const [isDrawing, setIsDrawing] = useState(false)
   const [color, setColor] = useState("#000000")
   const [tool, setTool] = useState("brush")
@@ -55,7 +58,7 @@ export default function AdvancedPaintApp() {
   const [isMaximized, setIsMaximized] = useState(false)
   const originalWindowState = useRef<OriginalWindowState | null>(null)
 
-  const { saveState, undo, redo, canUndo, canRedo } = useHistory()
+  const { saveState: historySaveState, undo: historyUndo, redo: historyRedo, canUndo, canRedo } = useHistory()
 
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null)
@@ -63,52 +66,89 @@ export default function AdvancedPaintApp() {
   const [isMovingSelection, setIsMovingSelection] = useState(false)
   const [selectionMoveStart, setSelectionMoveStart] = useState({ x: 0, y: 0 })
 
+  // Order of useCallback definitions is crucial. Define dependencies first.
+
   const getMainContext = useCallback(() => canvasRef.current?.getContext("2d") || null, [])
   const getOverlayContext = useCallback(() => overlayCanvasRef.current?.getContext("2d") || null, [])
+  const getScaledPos = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const rect = canvas.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0 || canvas.width === 0 || canvas.height === 0) {
+      return { x: 0, y: 0 }
+    }
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    }
+  }, [])
 
   const saveCanvasState = useCallback(() => {
     const mainCtx = getMainContext()
     if (mainCtx && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
       try {
-        saveState(mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
+        historySaveState(mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height))
       } catch (error) {
         console.error("Error saving canvas state:", error)
       }
     }
-  }, [saveState, getMainContext])
+  }, [historySaveState, getMainContext])
+
+  const applyOperationToMainCanvas = useCallback(
+      (operation: (ctx: CanvasRenderingContext2D) => void) => {
+        const mainCtx = getMainContext()
+        if (!mainCtx || !canvasRef.current) return
+        operation(mainCtx)
+        saveCanvasState()
+      },
+      [getMainContext, saveCanvasState],
+  )
+
+  const clearSelection = useCallback(
+      (shouldSaveState = true) => {
+        const overlayCtx = getOverlayContext()
+        if (!overlayCtx || !overlayCanvasRef.current) return
+        if (overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
+          overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
+        }
+        setSelectionRect(null)
+        setSelectedImageData(null)
+        setIsSelecting(false)
+        setIsMovingSelection(false)
+        if (shouldSaveState) {
+          saveCanvasState()
+        }
+      },
+      [getOverlayContext, saveCanvasState],
+  )
 
   const resizeCanvases = useCallback(
       (forceWidth?: number, forceHeight?: number) => {
         const mainCanvas = canvasRef.current
         const overlayCanvas = overlayCanvasRef.current
         const canvasContainer = canvasContainerRef.current
-
         if (mainCanvas && overlayCanvas && canvasContainer) {
           const mainCtx = mainCanvas.getContext("2d")
           if (!mainCtx) return
-
           const tempCanvas = document.createElement("canvas")
-          tempCanvas.width = mainCanvas.width
-          tempCanvas.height = mainCanvas.height
-          const tempCtx = tempCanvas.getContext("2d")
-          if (tempCtx && mainCanvas.width > 0 && mainCanvas.height > 0) {
-            tempCtx.drawImage(mainCanvas, 0, 0)
+          if (mainCanvas.width > 0 && mainCanvas.height > 0) {
+            tempCanvas.width = mainCanvas.width
+            tempCanvas.height = mainCanvas.height
+            const tempCtx = tempCanvas.getContext("2d")
+            tempCtx?.drawImage(mainCanvas, 0, 0)
           }
-
           const newWidth = forceWidth ?? canvasContainer.clientWidth
           const newHeight = forceHeight ?? canvasContainer.clientHeight
-
           if (newWidth <= 0 || newHeight <= 0) return
-
           mainCanvas.width = newWidth
           mainCanvas.height = newHeight
           overlayCanvas.width = newWidth
           overlayCanvas.height = newHeight
-
           mainCtx.fillStyle = "#FFFFFF"
           mainCtx.fillRect(0, 0, newWidth, newHeight)
-
-          if (tempCtx) {
+          if (tempCanvas.width > 0 && tempCanvas.height > 0) {
             mainCtx.drawImage(
                 tempCanvas,
                 0,
@@ -121,127 +161,408 @@ export default function AdvancedPaintApp() {
                 tempCanvas.height,
             )
           }
-
           const overlayCtx = overlayCanvas.getContext("2d")
           overlayCtx?.clearRect(0, 0, newWidth, newHeight)
-
           saveCanvasState()
         }
       },
-      [saveCanvasState],
-  )
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (isMaximized) {
-        resizeCanvases()
-      } else {
-        resizeCanvases(1200, 800)
-      }
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [isMaximized, resizeCanvases])
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      resizeCanvases(1200, 800)
-    }, 50)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const getMousePos = useCallback((e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
-    const canvas = canvasRef.current
-    if (!canvas) return null
-
-    const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0 || canvas.width === 0 || canvas.height === 0) {
-      return { x: 0, y: 0 }
-    }
-
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    }
-  }, [])
-
-  const applyOperationToMainCanvas = useCallback(
-      (operation: (ctx: CanvasRenderingContext2D) => void) => {
-        const mainCtx = getMainContext()
-        if (mainCtx) {
-          operation(mainCtx)
-          saveCanvasState()
-        }
-      },
-      [getMainContext, saveCanvasState],
-  )
-
-  const handleUndo = useCallback(() => {
-    const mainCtx = getMainContext()
-    if (mainCtx) {
-      const previousState = undo()
-      if (previousState) mainCtx.putImageData(previousState, 0, 0)
-    }
-  }, [undo, getMainContext])
-
-  const handleRedo = useCallback(() => {
-    const mainCtx = getMainContext()
-    if (mainCtx) {
-      const nextState = redo()
-      if (nextState) mainCtx.putImageData(nextState, 0, 0)
-    }
-  }, [redo, getMainContext])
-
-  const handleSave = useCallback(() => {
-    if (canvasRef.current) {
-      const link = document.createElement("a")
-      link.download = `${windowTitle.replace(/\s+/g, "_") || "painting"}.png`
-      link.href = canvasRef.current.toDataURL()
-      link.click()
-    }
-  }, [windowTitle])
-
-  const clearSelection = useCallback(
-      (save = true) => {
-        setIsSelecting(false)
-        setSelectionRect(null)
-        setSelectedImageData(null)
-        setIsMovingSelection(false)
-        const overlayCtx = getOverlayContext()
-        if (overlayCtx && overlayCtx.canvas.width > 0 && overlayCtx.canvas.height > 0) {
-          overlayCtx.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
-        }
-        if (save) saveCanvasState()
-      },
-      [getOverlayContext, saveCanvasState],
+      [saveCanvasState], // getMainContext is not needed here as it's stable and called inside
   )
 
   const finalizeSelectionMove = useCallback(() => {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
-    if (mainCtx && overlayCtx && selectedImageData && selectionRect && isMovingSelection) {
-      mainCtx.fillStyle = "#FFFFFF"
-      mainCtx.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
-      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y)
+    if (
+        !mainCtx ||
+        !overlayCtx ||
+        !canvasRef.current ||
+        !overlayCanvasRef.current ||
+        !selectionRect ||
+        !selectedImageData
+    )
+      return
+
+    mainCtx.clearRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
+    mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y)
+
+    if (overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
+      overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
+    }
+    // Update selectionRect to the new position for subsequent operations or display
+    setSelectionRect((prevRect) => (prevRect ? { ...prevRect, x: currentPos.x, y: currentPos.y } : null))
+    setSelectedImageData(null)
+    setIsMovingSelection(false)
+    saveCanvasState()
+  }, [getMainContext, getOverlayContext, selectionRect, selectedImageData, currentPos, saveCanvasState])
+
+  const processStartDrawing = useCallback(
+      (x: number, y: number) => {
+        const mainCtx = getMainContext()
+        if (!mainCtx || !canvasRef.current || canvasRef.current.width === 0 || canvasRef.current.height === 0) return
+
+        setCurrentPos({ x, y })
+        setStartPos({ x, y })
+
+        if (tool === "select") {
+          if (
+              selectionRect &&
+              x >= selectionRect.x &&
+              x <= selectionRect.x + selectionRect.width &&
+              y >= selectionRect.y &&
+              y <= selectionRect.y + selectionRect.height
+          ) {
+            if (!selectedImageData && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+              const imageData = mainCtx.getImageData(
+                  selectionRect.x,
+                  selectionRect.y,
+                  selectionRect.width,
+                  selectionRect.height,
+              )
+              setSelectedImageData(imageData)
+            }
+            setIsMovingSelection(true)
+            setSelectionMoveStart({ x: x - selectionRect.x, y: y - selectionRect.y })
+          } else {
+            if (selectionRect || isMovingSelection) finalizeSelectionMove()
+            setIsSelecting(true)
+          }
+          return
+        }
+
+        if (tool === "text") {
+          const text = prompt("Digite o texto:")
+          if (text) {
+            applyOperationToMainCanvas((ctx) => {
+              ctx.font = `${brushSize * 2}px Arial`
+              ctx.fillStyle = color
+              ctx.globalAlpha = opacity
+              ctx.fillText(text, x, y)
+              ctx.globalAlpha = 1
+            })
+          }
+          return
+        }
+
+        if (tool === "eyedropper") {
+          const pickedColor = getColorAtPoint(mainCtx, x, y)
+          setColor(rgbToHex(pickedColor))
+          return
+        }
+        if (tool === "rectangle" || tool === "circle") {
+          setIsShapeDrawing(true)
+          return
+        }
+        if (tool === "bucket") {
+          floodFill(mainCtx, Math.floor(x), Math.floor(y), color, canvasRef.current)
+          saveCanvasState()
+          return
+        }
+
+        mainCtx.globalAlpha = opacity
+        mainCtx.beginPath()
+        mainCtx.moveTo(x, y)
+        setIsDrawing(true)
+      },
+      [
+        getMainContext,
+        tool,
+        selectionRect,
+        selectedImageData,
+        isMovingSelection,
+        finalizeSelectionMove,
+        applyOperationToMainCanvas,
+        brushSize,
+        color,
+        opacity,
+        saveCanvasState, // Added as it's used by floodFill
+      ],
+  )
+
+  const processDraw = useCallback(
+      (x: number, y: number) => {
+        const mainCtx = getMainContext()
+        const overlayCtx = getOverlayContext()
+        if (
+            !mainCtx ||
+            !overlayCtx ||
+            !canvasRef.current ||
+            !overlayCanvasRef.current ||
+            canvasRef.current.width === 0 ||
+            canvasRef.current.height === 0
+        )
+          return
+
+        if (overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
+          overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
+        }
+
+        if (tool === "select") {
+          if (isSelecting) {
+            const width = x - startPos.x
+            const height = y - startPos.y
+            overlayCtx.setLineDash([4, 2])
+            overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
+            overlayCtx.strokeRect(startPos.x, startPos.y, width, height)
+            overlayCtx.setLineDash([])
+            setCurrentPos({ x, y })
+          } else if (isMovingSelection && selectedImageData && selectionRect) {
+            const newX = x - selectionMoveStart.x
+            const newY = y - selectionMoveStart.y
+            overlayCtx.putImageData(selectedImageData, newX, newY)
+            overlayCtx.setLineDash([4, 2])
+            overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
+            overlayCtx.strokeRect(newX, newY, selectionRect.width, selectionRect.height)
+            overlayCtx.setLineDash([])
+            setCurrentPos({ x: newX, y: newY })
+          } else if (selectionRect) {
+            overlayCtx.setLineDash([4, 2])
+            overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
+            overlayCtx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
+            overlayCtx.setLineDash([])
+          }
+          return
+        }
+
+        setCurrentPos({ x, y })
+
+        if (isShapeDrawing) {
+          overlayCtx.globalAlpha = opacity
+          if (tool === "rectangle") drawRectangle(overlayCtx, startPos.x, startPos.y, x, y, color)
+          else if (tool === "circle") {
+            const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
+            drawCircle(overlayCtx, startPos.x, startPos.y, radius, color)
+          }
+          return
+        }
+
+        if (!isDrawing) return
+
+        mainCtx.lineTo(x, y)
+        if (tool === "eraser") {
+          mainCtx.globalCompositeOperation = "destination-out"
+          mainCtx.lineWidth = brushSize * 2
+        } else if (tool === "spray") {
+          mainCtx.globalCompositeOperation = "source-over"
+          for (let i = 0; i < 20; i++) {
+            const offsetX = (Math.random() - 0.5) * brushSize * 2
+            const offsetY = (Math.random() - 0.5) * brushSize * 2
+            mainCtx.fillStyle = color
+            mainCtx.fillRect(x + offsetX, y + offsetY, 1, 1)
+          }
+          return
+        } else {
+          mainCtx.globalCompositeOperation = "source-over"
+          mainCtx.strokeStyle = color
+          mainCtx.lineWidth = brushSize
+        }
+        mainCtx.lineCap = "round"
+        mainCtx.stroke()
+      },
+      [
+        getMainContext,
+        getOverlayContext,
+        tool,
+        isSelecting,
+        startPos,
+        isMovingSelection,
+        selectedImageData,
+        selectionRect,
+        selectionMoveStart,
+        isShapeDrawing,
+        opacity,
+        color,
+        isDrawing,
+        brushSize,
+      ],
+  )
+
+  const stopDrawing = useCallback(() => {
+    const mainCtx = getMainContext()
+    const overlayCtx = getOverlayContext()
+    if (
+        !mainCtx ||
+        !overlayCtx ||
+        !overlayCanvasRef.current ||
+        overlayCanvasRef.current.width === 0 ||
+        overlayCanvasRef.current.height === 0
+    )
+      return
+
+    if (tool === "select") {
+      if (isSelecting) {
+        const selX = Math.min(startPos.x, currentPos.x)
+        const selY = Math.min(startPos.y, currentPos.y)
+        const selWidth = Math.abs(currentPos.x - startPos.x)
+        const selHeight = Math.abs(currentPos.y - startPos.y)
+        if (selWidth > 0 && selHeight > 0) {
+          setSelectionRect({ x: selX, y: selY, width: selWidth, height: selHeight })
+          if (canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+            const imageData = mainCtx.getImageData(selX, selY, selWidth, selHeight)
+            setSelectedImageData(imageData)
+          }
+        } else {
+          clearSelection(false)
+        }
+        setIsSelecting(false)
+      }
+      // Do not return here if isMovingSelection is true, let it fall through to save state
+      if (isMovingSelection) {
+        finalizeSelectionMove() // Finalize move on mouse up
+      }
+      return // If not moving, and just finished selecting, return.
+    }
+
+    if (isShapeDrawing) {
+      mainCtx.globalAlpha = opacity
+      if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color)
+      else if (tool === "circle") {
+        const radius = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2))
+        drawCircle(mainCtx, startPos.x, startPos.y, radius, color)
+      }
+      mainCtx.globalAlpha = 1
+      saveCanvasState()
+    } else if (isDrawing) {
+      mainCtx.beginPath() // End current path
       saveCanvasState()
     }
-    clearSelection(false)
-    if (overlayCtx.canvas.width > 0 && overlayCtx.canvas.height > 0) {
-      overlayCtx.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
+
+    if (overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
+      overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
     }
+    setIsDrawing(false)
+    setIsShapeDrawing(false)
+    mainCtx.globalCompositeOperation = "source-over" // Reset composite operation
   }, [
     getMainContext,
     getOverlayContext,
-    selectedImageData,
-    selectionRect,
+    tool,
+    isSelecting,
+    startPos,
     currentPos,
-    saveCanvasState,
-    isMovingSelection,
     clearSelection,
+    isShapeDrawing,
+    opacity,
+    color,
+    saveCanvasState,
+    isDrawing,
+    isMovingSelection,
+    finalizeSelectionMove,
   ])
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const pos = getScaledPos(e.clientX, e.clientY)
+    if (!pos) return
+    processStartDrawing(pos.x, pos.y)
+  }
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection) return
+    const pos = getScaledPos(e.clientX, e.clientY)
+    if (!pos) return
+    processDraw(pos.x, pos.y)
+  }
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length === 1) {
+      /* e.preventDefault(); */
+    }
+    const touch = e.touches[0]
+    const pos = getScaledPos(touch.clientX, touch.clientY)
+    if (!pos) return
+    processStartDrawing(pos.x, pos.y)
+  }
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length === 1) {
+      /* e.preventDefault(); */
+    }
+    if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection) return
+    const touch = e.touches[0]
+    const pos = getScaledPos(touch.clientX, touch.clientY)
+    if (!pos) return
+    processDraw(pos.x, pos.y)
+  }
+
+  const handleUndo = useCallback(() => {
+    historyUndo((imageData) => {
+      const mainCtx = getMainContext()
+      if (mainCtx && canvasRef.current) mainCtx.putImageData(imageData, 0, 0)
+    })
+  }, [historyUndo, getMainContext])
+
+  const handleRedo = useCallback(() => {
+    historyRedo((imageData) => {
+      const mainCtx = getMainContext()
+      if (mainCtx && canvasRef.current) mainCtx.putImageData(imageData, 0, 0)
+    })
+  }, [historyRedo, getMainContext])
+
+  const handleSave = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const dataURL = canvas.toDataURL("image/png")
+    const link = document.createElement("a")
+    link.download = `${windowTitle.replace("Paint Avançado - ", "") || "canvas"}.png`
+    link.href = dataURL
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }, [windowTitle])
+
+  const handleLoad = useCallback(
+      (file: File) => {
+        const mainCtx = getMainContext()
+        if (!mainCtx || !canvasRef.current) return
+        const img = new Image()
+        img.onload = () => {
+          const newWidth = img.width
+          const newHeight = img.height
+          if (isMobile || isMaximized) resizeCanvases()
+          else resizeCanvases(newWidth, newHeight)
+          setTimeout(() => {
+            const freshMainCtx = getMainContext()
+            if (freshMainCtx && canvasRef.current) {
+              freshMainCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+              freshMainCtx.fillStyle = "#FFFFFF"
+              freshMainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+              freshMainCtx.drawImage(img, 0, 0)
+              saveCanvasState()
+              setWindowTitle(`Paint Avançado - ${file.name}`)
+              setTempTitle(`Paint Avançado - ${file.name}`)
+            }
+          }, 50)
+        }
+        img.src = URL.createObjectURL(file)
+      },
+      [getMainContext, isMobile, isMaximized, resizeCanvases, saveCanvasState],
+  )
+
+  const handleClear = useCallback(() => {
+    const mainCtx = getMainContext()
+    if (mainCtx && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+      mainCtx.fillStyle = "#FFFFFF"
+      mainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      saveCanvasState()
+      setWindowTitle("Paint Avançado - sem título")
+      setTempTitle("Paint Avançado - sem título")
+      clearSelection(false)
+    }
+  }, [getMainContext, saveCanvasState, clearSelection])
+
+  // useEffects
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isMobile || isMaximized) resizeCanvases()
+      else resizeCanvases(1200, 800)
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [isMobile, isMaximized, resizeCanvases])
+
+  useEffect(() => {
+    const initialIsMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches
+    const timer = setTimeout(() => {
+      if (initialIsMobile) resizeCanvases()
+      else resizeCanvases(1200, 800)
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [resizeCanvases])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -272,13 +593,7 @@ export default function AdvancedPaintApp() {
             break
           case "o":
             e.preventDefault()
-            const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null
-            if (fileInput && fileInput.parentElement?.classList.contains("hidden")) {
-              const clickableParent = fileInput.closest("button") || fileInput.closest('[role="menuitem"]')
-              ;(clickableParent as HTMLElement)?.click()
-            } else {
-              ;(document.getElementById("file-open-trigger-in-menubar") as HTMLElement)?.click()
-            }
+            ;(document.getElementById("file-open-trigger-in-menubar") as HTMLElement)?.click()
             break
         }
       }
@@ -311,9 +626,7 @@ export default function AdvancedPaintApp() {
           }
           break
         case "escape":
-          if (tool === "select" && (selectionRect || isSelecting || isMovingSelection)) {
-            clearSelection()
-          }
+          if (tool === "select" && (selectionRect || isSelecting || isMovingSelection)) clearSelection()
           break
       }
     }
@@ -340,244 +653,10 @@ export default function AdvancedPaintApp() {
     }
   }, [tool, selectionRect, isMovingSelection, finalizeSelectionMove])
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const mainCtx = getMainContext()
-    const overlayCtx = getOverlayContext()
-    if (!mainCtx || !canvasRef.current || !overlayCtx || !overlayCanvasRef.current) return
-    if (canvasRef.current.width === 0 || canvasRef.current.height === 0) return
-
-    const pos = getMousePos(e)
-    if (!pos) return
-    const { x, y } = pos
-
-    setCurrentPos({ x, y })
-    setStartPos({ x, y })
-
-    if (tool === "select") {
-      if (
-          selectionRect &&
-          x >= selectionRect.x &&
-          x <= selectionRect.x + selectionRect.width &&
-          y >= selectionRect.y &&
-          y <= selectionRect.y + selectionRect.height
-      ) {
-        if (!selectedImageData) {
-          const imageData = mainCtx.getImageData(
-              selectionRect.x,
-              selectionRect.y,
-              selectionRect.width,
-              selectionRect.height,
-          )
-          setSelectedImageData(imageData)
-        }
-        setIsMovingSelection(true)
-        setSelectionMoveStart({ x: x - selectionRect.x, y: y - selectionRect.y })
-      } else {
-        if (selectionRect || isMovingSelection) finalizeSelectionMove()
-        setIsSelecting(true)
-      }
-      return
-    }
-
-    if (tool === "text") {
-      const text = prompt("Digite o texto:")
-      if (text) {
-        applyOperationToMainCanvas((ctx) => {
-          ctx.font = `${brushSize * 2}px Arial`
-          ctx.fillStyle = color
-          ctx.globalAlpha = opacity
-          ctx.fillText(text, x, y)
-          ctx.globalAlpha = 1
-        })
-      }
-      return
-    }
-
-    if (tool === "eyedropper") {
-      const pickedColor = getColorAtPoint(mainCtx, x, y)
-      setColor(rgbToHex(pickedColor))
-      return
-    }
-    if (tool === "rectangle" || tool === "circle") {
-      setIsShapeDrawing(true)
-      return
-    }
-    if (tool === "bucket") {
-      floodFill(mainCtx, Math.floor(x), Math.floor(y), color, canvasRef.current)
-      saveCanvasState()
-      return
-    }
-
-    mainCtx.globalAlpha = opacity
-    mainCtx.beginPath()
-    mainCtx.moveTo(x, y)
-    setIsDrawing(true)
-  }
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const mainCtx = getMainContext()
-    const overlayCtx = getOverlayContext()
-    if (!mainCtx || !canvasRef.current || !overlayCtx || !overlayCanvasRef.current) return
-    if (canvasRef.current.width === 0 || canvasRef.current.height === 0) return
-
-    const pos = getMousePos(e)
-    if (!pos) return
-    const { x, y } = pos
-
-    overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
-
-    if (tool === "select") {
-      if (isSelecting) {
-        const width = x - startPos.x
-        const height = y - startPos.y
-        overlayCtx.setLineDash([4, 2])
-        overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
-        overlayCtx.strokeRect(startPos.x, startPos.y, width, height)
-        overlayCtx.setLineDash([])
-        setCurrentPos({ x, y })
-      } else if (isMovingSelection && selectedImageData && selectionRect) {
-        const newX = x - selectionMoveStart.x
-        const newY = y - selectionMoveStart.y
-        overlayCtx.putImageData(selectedImageData, newX, newY)
-        overlayCtx.setLineDash([4, 2])
-        overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
-        overlayCtx.strokeRect(newX, newY, selectionRect.width, selectionRect.height)
-        overlayCtx.setLineDash([])
-        setCurrentPos({ x: newX, y: newY })
-      } else if (selectionRect) {
-        overlayCtx.setLineDash([4, 2])
-        overlayCtx.strokeStyle = "rgba(0,0,0,0.8)"
-        overlayCtx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
-        overlayCtx.setLineDash([])
-      }
-      return
-    }
-
-    setCurrentPos({ x, y })
-
-    if (isShapeDrawing) {
-      overlayCtx.globalAlpha = opacity
-      if (tool === "rectangle") drawRectangle(overlayCtx, startPos.x, startPos.y, x, y, color)
-      else if (tool === "circle") {
-        const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
-        drawCircle(overlayCtx, startPos.x, startPos.y, radius, color)
-      }
-      return
-    }
-
-    if (!isDrawing) return
-
-    mainCtx.lineTo(x, y)
-    if (tool === "eraser") {
-      mainCtx.globalCompositeOperation = "destination-out"
-      mainCtx.lineWidth = brushSize * 2
-    } else if (tool === "spray") {
-      mainCtx.globalCompositeOperation = "source-over"
-      for (let i = 0; i < 20; i++) {
-        const offsetX = (Math.random() - 0.5) * brushSize * 2
-        const offsetY = (Math.random() - 0.5) * brushSize * 2
-        mainCtx.fillStyle = color
-        mainCtx.fillRect(x + offsetX, y + offsetY, 1, 1)
-      }
-      return
-    } else {
-      mainCtx.globalCompositeOperation = "source-over"
-      mainCtx.strokeStyle = color
-      mainCtx.lineWidth = brushSize
-    }
-    mainCtx.lineCap = "round"
-    mainCtx.stroke()
-  }
-
-  const stopDrawing = () => {
-    const mainCtx = getMainContext()
-    const overlayCtx = getOverlayContext()
-    if (!mainCtx || !overlayCtx || !overlayCanvasRef.current) return
-    if (overlayCanvasRef.current.width === 0 || overlayCanvasRef.current.height === 0) return
-
-    if (tool === "select") {
-      if (isSelecting) {
-        const selX = Math.min(startPos.x, currentPos.x)
-        const selY = Math.min(startPos.y, currentPos.y)
-        const selWidth = Math.abs(currentPos.x - startPos.x)
-        const selHeight = Math.abs(currentPos.y - startPos.y)
-
-        if (selWidth > 0 && selHeight > 0) {
-          setSelectionRect({ x: selX, y: selY, width: selWidth, height: selHeight })
-          const imageData = mainCtx.getImageData(selX, selY, selWidth, selHeight)
-          setSelectedImageData(imageData)
-        } else {
-          clearSelection(false)
-        }
-        setIsSelecting(false)
-      }
-      return
-    }
-
-    if (isShapeDrawing) {
-      mainCtx.globalAlpha = opacity
-      if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color)
-      else if (tool === "circle") {
-        const radius = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2))
-        drawCircle(mainCtx, startPos.x, startPos.y, radius, color)
-      }
-      mainCtx.globalAlpha = 1
-      saveCanvasState()
-    } else if (isDrawing) {
-      mainCtx.beginPath()
-      saveCanvasState()
-    }
-
-    overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
-    setIsDrawing(false)
-    setIsShapeDrawing(false)
-    mainCtx.globalCompositeOperation = "source-over"
-  }
-
-  const handleLoad = (file: File) => {
-    const mainCtx = getMainContext()
-    if (!mainCtx || !canvasRef.current) return
-    const img = new Image()
-    img.onload = () => {
-      const newWidth = img.width
-      const newHeight = img.height
-
-      if (!isMaximized) {
-        resizeCanvases(newWidth, newHeight) // Resize to image dimensions if not maximized
-      } else {
-        // If maximized, keep current canvas size and draw image (might be clipped or scaled by browser)
-        // Or, ideally, offer user choice or fit image within current bounds
-      }
-
-      mainCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      mainCtx.fillStyle = "#FFFFFF"
-      mainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      mainCtx.drawImage(img, 0, 0)
-      saveCanvasState()
-      setWindowTitle(`Paint Avançado - ${file.name}`)
-      setTempTitle(`Paint Avançado - ${file.name}`)
-    }
-    img.src = URL.createObjectURL(file)
-  }
-
-  const handleClear = () => {
-    const mainCtx = getMainContext()
-    if (mainCtx && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
-      mainCtx.fillStyle = "#FFFFFF"
-      mainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      saveCanvasState()
-      setWindowTitle("Paint Avançado - sem título")
-      setTempTitle("Paint Avançado - sem título")
-      clearSelection(false)
-    }
-  }
-
+  // Other functions (not requiring useCallback or already simple setters/handlers)
   const addCustomColor = (newColor: string) => {
-    if (!customColors.includes(newColor)) {
-      setCustomColors((prev) => [...prev.slice(-7), newColor])
-    }
+    if (!customColors.includes(newColor)) setCustomColors((prev) => [...prev.slice(-7), newColor])
   }
-
   const viewBlack = () => {
     const mainCtx = getMainContext()
     if (mainCtx && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
@@ -591,14 +670,11 @@ export default function AdvancedPaintApp() {
         data[i + 2] = avg < 128 ? 0 : 255
       }
       mainCtx.putImageData(imageData, 0, 0)
-      setTimeout(() => {
-        mainCtx.putImageData(currentState, 0, 0)
-      }, 2000)
+      setTimeout(() => mainCtx.putImageData(currentState, 0, 0), 2000)
     }
   }
-
   const startDraggingWindow = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isEditingTitle || isMaximized) return
+    if (isEditingTitle || isMaximized || isMobile) return
     setDragging(true)
     setPosition({
       x: e.clientX - (containerRef.current?.offsetLeft || 0),
@@ -606,18 +682,14 @@ export default function AdvancedPaintApp() {
     })
   }
   const onDragWindow = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (dragging && !isMaximized) {
-      const left = e.clientX - position.x
-      const top = e.clientY - position.y
-      if (containerRef.current) {
-        containerRef.current.style.left = `${left}px`
-        containerRef.current.style.top = `${top}px`
-      }
+    if (dragging && !isMaximized && !isMobile && containerRef.current) {
+      containerRef.current.style.left = `${e.clientX - position.x}px`
+      containerRef.current.style.top = `${e.clientY - position.y}px`
     }
   }
   const stopDraggingWindow = () => setDragging(false)
-
   const handleTitleDoubleClick = () => {
+    if (isMobile) return
     setTempTitle(windowTitle)
     setIsEditingTitle(true)
   }
@@ -628,22 +700,19 @@ export default function AdvancedPaintApp() {
   }
   const openWindowColorPicker = () => windowColorInputRef.current?.click()
   const openPageBackgroundColorPicker = () => pageBgColorInputRef.current?.click()
-
   const handleToggleMaximize = () => {
+    if (isMobile) return
     const windowEl = containerRef.current
     if (!windowEl) return
-
-    setIsMaximized((prevIsMaximized) => {
-      const nextIsMaximized = !prevIsMaximized
-      if (nextIsMaximized) {
+    setIsMaximized((prev) => {
+      if (!prev)
         originalWindowState.current = {
           width: windowEl.style.width || getComputedStyle(windowEl).width,
           left: windowEl.style.left || getComputedStyle(windowEl).left,
           top: windowEl.style.top || getComputedStyle(windowEl).top,
           transform: windowEl.style.transform || getComputedStyle(windowEl).transform,
         }
-      }
-      return nextIsMaximized
+      return !prev
     })
   }
 
@@ -651,14 +720,10 @@ export default function AdvancedPaintApp() {
     const baseStyle: React.CSSProperties = {
       backgroundColor: windowBackgroundColor,
       position: "absolute",
-      borderWidth: "2px",
-      borderColor: "white",
-      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
       display: "flex",
       flexDirection: "column",
     }
-
-    if (isMaximized) {
+    if (isMobile || isMaximized)
       return {
         ...baseStyle,
         width: "100%",
@@ -666,9 +731,12 @@ export default function AdvancedPaintApp() {
         top: "0px",
         left: "0px",
         transform: "none",
+        borderWidth: isMobile ? "0px" : "2px",
+        borderColor: "white",
+        boxShadow: isMobile ? "none" : "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
       }
-    } else {
-      const styleToRestore = originalWindowState.current || {
+    else {
+      const r = originalWindowState.current || {
         width: "900px",
         left: "50%",
         top: "50%",
@@ -676,21 +744,16 @@ export default function AdvancedPaintApp() {
       }
       return {
         ...baseStyle,
-        width: styleToRestore.width,
-        left: styleToRestore.left,
-        top: styleToRestore.top,
-        transform: styleToRestore.transform,
+        ...r,
+        borderWidth: "2px",
+        borderColor: "white",
+        boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
       }
     }
   }
-
   const getCanvasElementStyle = (): React.CSSProperties => {
-    if (isMaximized) {
-      return { width: "100%", height: "100%" }
-    } else {
-      // No modo padrão, o canvas tem sua resolução intrínseca como tamanho de exibição
-      return { width: `${canvasRef.current?.width || 1200}px`, height: `${canvasRef.current?.height || 800}px` }
-    }
+    if (isMobile || isMaximized) return { width: "100%", height: "100%" }
+    else return { width: `${canvasRef.current?.width || 1200}px`, height: `${canvasRef.current?.height || 800}px` }
   }
 
   return (
@@ -711,51 +774,53 @@ export default function AdvancedPaintApp() {
                 value={windowBackgroundColor}
                 onChange={(e) => setWindowBackgroundColor(e.target.value)}
             />
-            <div
-                className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center shrink-0"
-                style={{ cursor: isMaximized ? "default" : "move" }}
-                onMouseDown={startDraggingWindow}
-                onMouseMove={onDragWindow}
-                onMouseUp={stopDraggingWindow}
-                onMouseLeave={stopDraggingWindow}
-            >
-              {isEditingTitle ? (
-                  <input
-                      type="text"
-                      value={tempTitle}
-                      onChange={handleTitleChange}
-                      onBlur={handleTitleBlur}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleTitleBlur()
-                        if (e.key === "Escape") {
-                          setTempTitle(windowTitle)
-                          setIsEditingTitle(false)
-                        }
-                      }}
-                      className="bg-blue-800 text-white px-1 flex-grow"
-                      autoFocus
-                  />
-              ) : (
-                  <span onDoubleClick={handleTitleDoubleClick} className="flex-grow">
-                {windowTitle}
-              </span>
-              )}
-              <div className="flex gap-1">
-                <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                  <Minus className="h-3 w-3" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700"
-                    onClick={handleToggleMaximize}
+            {!isMobile && (
+                <div
+                    className="bg-blue-900 text-white px-2 py-1 flex justify-between items-center shrink-0"
+                    style={{ cursor: isMaximized ? "default" : "move" }}
+                    onMouseDown={startDraggingWindow}
+                    onMouseMove={onDragWindow}
+                    onMouseUp={stopDraggingWindow}
+                    onMouseLeave={stopDraggingWindow}
                 >
-                  {isMaximized ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-                </Button>
-                <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
+                  {isEditingTitle ? (
+                      <input
+                          type="text"
+                          value={tempTitle}
+                          onChange={handleTitleChange}
+                          onBlur={handleTitleBlur}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleTitleBlur()
+                            if (e.key === "Escape") {
+                              setTempTitle(windowTitle)
+                              setIsEditingTitle(false)
+                            }
+                          }}
+                          className="bg-blue-800 text-white px-1 flex-grow"
+                          autoFocus
+                      />
+                  ) : (
+                      <span onDoubleClick={handleTitleDoubleClick} className="flex-grow">
+                  {windowTitle}
+                </span>
+                  )}
+                  <div className="flex gap-1">
+                    <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700"
+                        onClick={handleToggleMaximize}
+                    >
+                      {isMaximized ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+                    </Button>
+                    <Button variant="ghost" className="h-5 w-5 p-0 min-w-0 text-white hover:bg-blue-700">
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+            )}
             <MenuBar
                 onSave={handleSave}
                 onLoad={handleLoad}
@@ -767,8 +832,9 @@ export default function AdvancedPaintApp() {
                 onViewBlack={viewBlack}
                 onOpenWindowColorPicker={openWindowColorPicker}
                 onOpenPageBackgroundColorPicker={openPageBackgroundColorPicker}
+                isMobile={isMobile}
             />
-            <div className="flex flex-grow min-h-0">
+            <div className={`flex flex-grow min-h-0 ${isMobile ? "flex-col" : ""}`}>
               <ToolPanel
                   selectedTool={tool}
                   onToolChange={setTool}
@@ -776,28 +842,32 @@ export default function AdvancedPaintApp() {
                   onBrushSizeChange={setBrushSize}
                   opacity={opacity}
                   onOpacityChange={setOpacity}
+                  isMobile={isMobile}
               />
               <div
                   ref={canvasContainerRef}
                   className="relative border border-gray-400 flex-grow bg-white"
                   style={{
-                    height: isMaximized ? undefined : "500px",
-                    overflow: isMaximized ? "hidden" : "auto", // Scroll no modo padrão
+                    height: !isMobile && !isMaximized ? "500px" : undefined,
+                    overflow: !isMobile && !isMaximized ? "auto" : "hidden",
                   }}
               >
                 <canvas
                     ref={canvasRef}
-                    onMouseDown={startDrawing}
-                    onMouseMove={draw}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
                     onMouseUp={stopDrawing}
                     onMouseOut={stopDrawing}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={stopDrawing}
                     className="absolute top-0 left-0 cursor-crosshair"
-                    style={getCanvasElementStyle()} // Estilo dinâmico para o canvas
+                    style={getCanvasElementStyle()}
                 />
                 <canvas
                     ref={overlayCanvasRef}
                     className="absolute top-0 left-0 pointer-events-none"
-                    style={getCanvasElementStyle()} // Estilo dinâmico para o canvas
+                    style={getCanvasElementStyle()}
                 />
               </div>
             </div>
@@ -806,16 +876,19 @@ export default function AdvancedPaintApp() {
                 onColorChange={setColor}
                 customColors={customColors}
                 onAddCustomColor={addCustomColor}
+                isMobile={isMobile}
             />
-            <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between shrink-0">
-            <span>
-              Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
-            </span>
-              <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção</span>
-            </div>
+            {!isMobile && (
+                <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between shrink-0">
+              <span>
+                Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
+              </span>
+                  <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção</span>
+                </div>
+            )}
           </div>
         </div>
-        <PortfolioPopup />
+        {!isMobile && <PortfolioPopup />}
       </>
   )
 }

@@ -15,7 +15,8 @@ interface MenuBarProps {
   canRedo: boolean
   onViewBlack: () => void
   onOpenWindowColorPicker: () => void
-  onOpenPageBackgroundColorPicker: () => void // Adicionar esta linha
+  onOpenPageBackgroundColorPicker: () => void
+  isMobile: boolean // Adicionado para ajustes mobile
 }
 
 export function MenuBar({
@@ -28,7 +29,8 @@ export function MenuBar({
                           canRedo,
                           onViewBlack,
                           onOpenWindowColorPicker,
-                          onOpenPageBackgroundColorPicker, // Adicionar esta linha
+                          onOpenPageBackgroundColorPicker,
+                          isMobile,
                         }: MenuBarProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -37,7 +39,6 @@ export function MenuBar({
     if (file) {
       onLoad(file)
     }
-    // Resetar o valor do input para permitir selecionar o mesmo arquivo novamente
     if (event.target) {
       event.target.value = ""
     }
@@ -47,9 +48,15 @@ export function MenuBar({
     fileInputRef.current?.click()
   }
 
+  const handleHelpClick = () => {
+    window.open("https://lucas-lima.xyz", "_blank", "noopener,noreferrer")
+  }
+
   return (
-      <div className="bg-gray-300 px-2 py-1 border-b border-gray-400 flex items-center gap-2">
-        <div className="flex items-center gap-1 mr-4">
+      <div
+          className={`bg-gray-300 px-2 py-1 border-b border-gray-400 flex items-center gap-2 ${isMobile ? "overflow-x-auto" : ""}`}
+      >
+        <div className="flex items-center gap-1 mr-4 whitespace-nowrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
@@ -60,8 +67,6 @@ export function MenuBar({
               <input type="file" accept="image/*" onChange={handleFileLoad} className="hidden" ref={fileInputRef} />
               <DropdownMenuItem
                   onSelect={(e) => {
-                    // Prevenir o comportamento padrão do DropdownMenuItem que pode fechar o menu
-                    // e permitir que o clique no input de arquivo funcione
                     e.preventDefault()
                     triggerFileInput()
                   }}
@@ -137,22 +142,24 @@ export function MenuBar({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+          <Button variant="ghost" className="text-sm px-2 py-1 h-auto" onClick={handleHelpClick}>
             Ajuda
           </Button>
         </div>
 
-        <div className="flex items-center gap-1 border-l border-gray-400 pl-2">
-          <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Desfazer (Ctrl+Z)">
-            <RotateCcw className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Refazer (Ctrl+Y)">
-            <RotateCw className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClear} title="Limpar Tudo">
-            Limpar
-          </Button>
-        </div>
+        {!isMobile && ( // Ocultar botões de atalho no mobile
+            <div className="flex items-center gap-1 border-l border-gray-400 pl-2">
+              <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Desfazer (Ctrl+Z)">
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Refazer (Ctrl+Y)">
+                <RotateCw className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onClear} title="Limpar Tudo">
+                Limpar
+              </Button>
+            </div>
+        )}
       </div>
   )
 }
