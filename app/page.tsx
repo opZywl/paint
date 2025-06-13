@@ -2,6 +2,6 @@
 
 import AdvancedPaintApp from "../AdvancedPaintApp"
 
-export default function SyntheticV0PageForDeployment() {
+export default function SyntheticDeployPage() {
   return <AdvancedPaintApp />
 }
