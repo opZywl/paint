@@ -76,8 +76,8 @@ export default function AdvancedPaintApp() {
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 })
   const [isShapeDrawing, setIsShapeDrawing] = useState(false)
 
-  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#1E3A8A") // Default to classic blue
-  const [pageBackgroundColor, setPageBackgroundColor] = useState("#0D9488")
+  const [windowBackgroundColor, setWindowBackgroundColor] = useState("#1E3A8A")
+  const [pageBackgroundColor, setPageBackgroundColor] = useState("#000000")
   const [windowTitle, setWindowTitle] = useState("Paint Avançado - sem título")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [tempTitle, setTempTitle] = useState(windowTitle)
