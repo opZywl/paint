@@ -30,7 +30,7 @@ export function PortfolioPopup() {
 
             {/* Popup */}
             {isOpen && (
-                <div className="fixed bottom-4 right-4 z-50 w-72 bg-gray-900 text-white rounded-lg shadow-xl border border-gray-700 transform translate-y-0 opacity-100 transition-all duration-300 ease-out">
+                <div className="fixed bottom-4 right-4 z-50 w-72 bg-black text-white rounded-lg shadow-xl border border-gray-800 transform translate-y-0 opacity-100 transition-all duration-300 ease-out">
                     {/* Ajuste para aparecer acima do botão flutuante se necessário, ou ajustar a posição inicial */}
                     {/* Exemplo: bottom-20 right-4 se o botão estiver em bottom-4 right-4 */}
                     <div className="p-4">
