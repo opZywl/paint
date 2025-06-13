@@ -16,7 +16,7 @@ interface MenuBarProps {
   onViewBlack: () => void
   onOpenWindowColorPicker: () => void
   onOpenPageBackgroundColorPicker: () => void
-  isMobile: boolean // Adicionado para ajustes mobile
+  isMobile: boolean
 }
 
 export function MenuBar({
@@ -59,7 +59,7 @@ export function MenuBar({
         <div className="flex items-center gap-1 mr-4 whitespace-nowrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="text-sm px-2 py-1 h-auto">
+              <Button variant="ghost" className="text-sm px-2 py-1 h-auto" id="file-open-trigger-in-menubar">
                 Arquivo
               </Button>
             </DropdownMenuTrigger>
@@ -147,7 +147,7 @@ export function MenuBar({
           </Button>
         </div>
 
-        {!isMobile && ( // Ocultar botões de atalho no mobile
+        {!isMobile && (
             <div className="flex items-center gap-1 border-l border-gray-400 pl-2">
               <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Desfazer (Ctrl+Z)">
                 <RotateCcw className="w-4 h-4" />

@@ -18,7 +18,7 @@ interface ToolPanelProps {
     onBrushSizeChange: (size: number) => void
     opacity: number
     onOpacityChange: (opacity: number) => void
-    isMobile: boolean // Adicionado
+    isMobile: boolean
 }
 
 export function ToolPanel({
@@ -28,7 +28,7 @@ export function ToolPanel({
                               onBrushSizeChange,
                               opacity,
                               onOpacityChange,
-                              isMobile, // Adicionado
+                              isMobile,
                           }: ToolPanelProps) {
     const tools = [
         { id: "brush", icon: Brush, name: "Pincel" },
@@ -91,7 +91,6 @@ export function ToolPanel({
         )
     }
 
-    // Layout Desktop
     return (
         <div className="w-20 bg-gray-300 p-1 border-r border-gray-400 flex flex-col">
             <div className="grid grid-cols-2 gap-1 mb-4">

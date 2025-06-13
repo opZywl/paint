@@ -6,10 +6,10 @@ interface ColorPickerProps {
   onColorChange: (color: string) => void
   customColors: string[]
   onAddCustomColor: (color: string) => void
-  isMobile: boolean // Adicionado
+  isMobile: boolean
 }
 
-const defaultColors = [
+const mobileDefaultColors = [
   "#000000",
   "#808080",
   "#800000",
@@ -26,7 +26,7 @@ const defaultColors = [
   "#00FFFF",
   "#0000FF",
   "#FF00FF",
-] // Reduzido para mobile
+]
 
 const desktopDefaultColors = [
   "#000000",
@@ -66,7 +66,7 @@ export function ColorPicker({
                               onAddCustomColor,
                               isMobile,
                             }: ColorPickerProps) {
-  const colorsToDisplay = isMobile ? defaultColors : desktopDefaultColors
+  const colorsToDisplay = isMobile ? mobileDefaultColors : desktopDefaultColors
 
   return (
       <div
@@ -83,7 +83,7 @@ export function ColorPicker({
               />
           ))}
         </div>
-        {!isMobile && ( // Custom colors e color input apenas no desktop por enquanto
+        {!isMobile && (
             <>
               <div className="flex flex-wrap gap-1 mr-4">
                 {customColors.map((color, index) => (

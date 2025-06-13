@@ -66,8 +66,6 @@ export default function AdvancedPaintApp() {
   const [isMovingSelection, setIsMovingSelection] = useState(false)
   const [selectionMoveStart, setSelectionMoveStart] = useState({ x: 0, y: 0 })
 
-  // Order of useCallback definitions is crucial. Define dependencies first.
-
   const getMainContext = useCallback(() => canvasRef.current?.getContext("2d") || null, [])
   const getOverlayContext = useCallback(() => overlayCanvasRef.current?.getContext("2d") || null, [])
   const getScaledPos = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -109,8 +107,12 @@ export default function AdvancedPaintApp() {
   const clearSelection = useCallback(
       (shouldSaveState = true) => {
         const overlayCtx = getOverlayContext()
-        if (!overlayCtx || !overlayCanvasRef.current) return
-        if (overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
+        if (
+            overlayCtx &&
+            overlayCanvasRef.current &&
+            overlayCanvasRef.current.width > 0 &&
+            overlayCanvasRef.current.height > 0
+        ) {
           overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
         }
         setSelectionRect(null)
@@ -149,46 +151,27 @@ export default function AdvancedPaintApp() {
           mainCtx.fillStyle = "#FFFFFF"
           mainCtx.fillRect(0, 0, newWidth, newHeight)
           if (tempCanvas.width > 0 && tempCanvas.height > 0) {
-            mainCtx.drawImage(
-                tempCanvas,
-                0,
-                0,
-                tempCanvas.width,
-                tempCanvas.height,
-                0,
-                0,
-                tempCanvas.width,
-                tempCanvas.height,
-            )
+            mainCtx.drawImage(tempCanvas, 0, 0)
           }
           const overlayCtx = overlayCanvas.getContext("2d")
           overlayCtx?.clearRect(0, 0, newWidth, newHeight)
           saveCanvasState()
         }
       },
-      [saveCanvasState], // getMainContext is not needed here as it's stable and called inside
+      [saveCanvasState],
   )
 
   const finalizeSelectionMove = useCallback(() => {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
-    if (
-        !mainCtx ||
-        !overlayCtx ||
-        !canvasRef.current ||
-        !overlayCanvasRef.current ||
-        !selectionRect ||
-        !selectedImageData
-    )
-      return
+    if (!mainCtx || !overlayCtx || !selectionRect || !selectedImageData) return
 
     mainCtx.clearRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
     mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y)
 
-    if (overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
+    if (overlayCanvasRef.current && overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
       overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
     }
-    // Update selectionRect to the new position for subsequent operations or display
     setSelectionRect((prevRect) => (prevRect ? { ...prevRect, x: currentPos.x, y: currentPos.y } : null))
     setSelectedImageData(null)
     setIsMovingSelection(false)
@@ -211,7 +194,7 @@ export default function AdvancedPaintApp() {
               y >= selectionRect.y &&
               y <= selectionRect.y + selectionRect.height
           ) {
-            if (!selectedImageData && canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+            if (!selectedImageData) {
               const imageData = mainCtx.getImageData(
                   selectionRect.x,
                   selectionRect.y,
@@ -274,7 +257,7 @@ export default function AdvancedPaintApp() {
         brushSize,
         color,
         opacity,
-        saveCanvasState, // Added as it's used by floodFill
+        saveCanvasState,
       ],
   )
 
@@ -282,15 +265,7 @@ export default function AdvancedPaintApp() {
       (x: number, y: number) => {
         const mainCtx = getMainContext()
         const overlayCtx = getOverlayContext()
-        if (
-            !mainCtx ||
-            !overlayCtx ||
-            !canvasRef.current ||
-            !overlayCanvasRef.current ||
-            canvasRef.current.width === 0 ||
-            canvasRef.current.height === 0
-        )
-          return
+        if (!mainCtx || !overlayCtx || !canvasRef.current || !overlayCanvasRef.current) return
 
         if (overlayCanvasRef.current.width > 0 && overlayCanvasRef.current.height > 0) {
           overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
@@ -379,14 +354,7 @@ export default function AdvancedPaintApp() {
   const stopDrawing = useCallback(() => {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
-    if (
-        !mainCtx ||
-        !overlayCtx ||
-        !overlayCanvasRef.current ||
-        overlayCanvasRef.current.width === 0 ||
-        overlayCanvasRef.current.height === 0
-    )
-      return
+    if (!mainCtx || !overlayCtx || !overlayCanvasRef.current) return
 
     if (tool === "select") {
       if (isSelecting) {
@@ -405,11 +373,10 @@ export default function AdvancedPaintApp() {
         }
         setIsSelecting(false)
       }
-      // Do not return here if isMovingSelection is true, let it fall through to save state
       if (isMovingSelection) {
-        finalizeSelectionMove() // Finalize move on mouse up
+        finalizeSelectionMove()
       }
-      return // If not moving, and just finished selecting, return.
+      return
     }
 
     if (isShapeDrawing) {
@@ -422,7 +389,7 @@ export default function AdvancedPaintApp() {
       mainCtx.globalAlpha = 1
       saveCanvasState()
     } else if (isDrawing) {
-      mainCtx.beginPath() // End current path
+      mainCtx.beginPath()
       saveCanvasState()
     }
 
@@ -431,7 +398,7 @@ export default function AdvancedPaintApp() {
     }
     setIsDrawing(false)
     setIsShapeDrawing(false)
-    mainCtx.globalCompositeOperation = "source-over" // Reset composite operation
+    mainCtx.globalCompositeOperation = "source-over"
   }, [
     getMainContext,
     getOverlayContext,
@@ -451,46 +418,40 @@ export default function AdvancedPaintApp() {
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getScaledPos(e.clientX, e.clientY)
-    if (!pos) return
-    processStartDrawing(pos.x, pos.y)
+    if (pos) processStartDrawing(pos.x, pos.y)
   }
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection) return
     const pos = getScaledPos(e.clientX, e.clientY)
-    if (!pos) return
-    processDraw(pos.x, pos.y)
+    if (pos) processDraw(pos.x, pos.y)
   }
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (e.touches.length === 1) {
-      /* e.preventDefault(); */
-    }
     const touch = e.touches[0]
-    const pos = getScaledPos(touch.clientX, touch.clientY)
-    if (!pos) return
-    processStartDrawing(pos.x, pos.y)
+    if (touch) {
+      const pos = getScaledPos(touch.clientX, touch.clientY)
+      if (pos) processStartDrawing(pos.x, pos.y)
+    }
   }
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (e.touches.length === 1) {
-      /* e.preventDefault(); */
-    }
     if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection) return
     const touch = e.touches[0]
-    const pos = getScaledPos(touch.clientX, touch.clientY)
-    if (!pos) return
-    processDraw(pos.x, pos.y)
+    if (touch) {
+      const pos = getScaledPos(touch.clientX, touch.clientY)
+      if (pos) processDraw(pos.x, pos.y)
+    }
   }
 
   const handleUndo = useCallback(() => {
     historyUndo((imageData) => {
       const mainCtx = getMainContext()
-      if (mainCtx && canvasRef.current) mainCtx.putImageData(imageData, 0, 0)
+      if (mainCtx) mainCtx.putImageData(imageData, 0, 0)
     })
   }, [historyUndo, getMainContext])
 
   const handleRedo = useCallback(() => {
     historyRedo((imageData) => {
       const mainCtx = getMainContext()
-      if (mainCtx && canvasRef.current) mainCtx.putImageData(imageData, 0, 0)
+      if (mainCtx) mainCtx.putImageData(imageData, 0, 0)
     })
   }, [historyRedo, getMainContext])
 
@@ -508,14 +469,10 @@ export default function AdvancedPaintApp() {
 
   const handleLoad = useCallback(
       (file: File) => {
-        const mainCtx = getMainContext()
-        if (!mainCtx || !canvasRef.current) return
         const img = new Image()
         img.onload = () => {
-          const newWidth = img.width
-          const newHeight = img.height
           if (isMobile || isMaximized) resizeCanvases()
-          else resizeCanvases(newWidth, newHeight)
+          else resizeCanvases(img.width, img.height)
           setTimeout(() => {
             const freshMainCtx = getMainContext()
             if (freshMainCtx && canvasRef.current) {
@@ -546,7 +503,6 @@ export default function AdvancedPaintApp() {
     }
   }, [getMainContext, saveCanvasState, clearSelection])
 
-  // useEffects
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isMobile || isMaximized) resizeCanvases()
@@ -653,7 +609,6 @@ export default function AdvancedPaintApp() {
     }
   }, [tool, selectionRect, isMovingSelection, finalizeSelectionMove])
 
-  // Other functions (not requiring useCallback or already simple setters/handlers)
   const addCustomColor = (newColor: string) => {
     if (!customColors.includes(newColor)) setCustomColors((prev) => [...prev.slice(-7), newColor])
   }
@@ -846,7 +801,7 @@ export default function AdvancedPaintApp() {
               />
               <div
                   ref={canvasContainerRef}
-                  className="relative border border-gray-400 flex-grow bg-white"
+                  className="relative border border-gray-400 flex-grow bg-white canvas-container"
                   style={{
                     height: !isMobile && !isMaximized ? "500px" : undefined,
                     overflow: !isMobile && !isMaximized ? "auto" : "hidden",

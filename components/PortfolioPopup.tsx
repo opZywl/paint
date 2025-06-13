@@ -12,11 +12,10 @@ export function PortfolioPopup() {
 
     return (
         <>
-            {/* Ícone flutuante */}
             {!isOpen && (
                 <button
                     onClick={togglePopup}
-                    className="fixed bottom-2 right-2 z-50 bg-black rounded-full p-3 shadow-lg hover:bg-gray-800 transition-colors" // Posicionamento ajustado para o canto
+                    className="fixed bottom-2 right-2 z-50 bg-black rounded-full p-3 shadow-lg hover:bg-gray-800 transition-colors"
                     aria-label="Abrir informações do desenvolvedor"
                 >
                     <User className="h-6 w-6 text-white" />
@@ -28,10 +27,7 @@ export function PortfolioPopup() {
                 </button>
             )}
 
-            {/* Popup */}
             {isOpen && (
-                // Posiciona o canto inferior direito do popup no canto inferior direito da tela
-                // O popup se expandirá para cima e para a esquerda a partir deste ponto.
                 <div className="fixed bottom-2 right-2 z-50 w-72 bg-black text-white rounded-lg shadow-xl border border-gray-800 transform translate-y-0 opacity-100 transition-all duration-300 ease-out">
                     <div className="p-4">
                         <div className="flex items-center justify-between mb-3">

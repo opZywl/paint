@@ -1,11 +1,11 @@
 export function drawRectangle(
-  ctx: CanvasRenderingContext2D,
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-  color: string,
-  filled = false,
+    ctx: CanvasRenderingContext2D,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    color: string,
+    filled = false,
 ) {
   const width = endX - startX
   const height = endY - startY
@@ -22,12 +22,12 @@ export function drawRectangle(
 }
 
 export function drawCircle(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  centerY: number,
-  radius: number,
-  color: string,
-  filled = false,
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    radius: number,
+    color: string,
+    filled = false,
 ) {
   ctx.beginPath()
   ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI)
@@ -43,11 +43,11 @@ export function drawCircle(
 }
 
 export function floodFill(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  fillColor: string,
-  canvas: HTMLCanvasElement,
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    fillColor: string,
+    canvas: HTMLCanvasElement,
 ) {
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
   const data = imageData.data
@@ -59,7 +59,7 @@ export function floodFill(
 
   if (!fillColorRgb || colorsEqual(targetColor, fillColorRgb)) return
 
-  const stack = [[x, y]]
+  const stack: [number, number][] = [[x, y]]
 
   while (stack.length > 0) {
     const [currentX, currentY] = stack.pop()!
@@ -91,11 +91,11 @@ function getPixelColor(data: Uint8ClampedArray, x: number, y: number, width: num
 }
 
 function setPixelColor(
-  data: Uint8ClampedArray,
-  x: number,
-  y: number,
-  width: number,
-  color: { r: number; g: number; b: number },
+    data: Uint8ClampedArray,
+    x: number,
+    y: number,
+    width: number,
+    color: { r: number; g: number; b: number },
 ) {
   const index = (y * width + x) * 4
   data[index] = color.r
@@ -107,15 +107,15 @@ function setPixelColor(
 function hexToRgb(hex: string) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   return result
-    ? {
+      ? {
         r: Number.parseInt(result[1], 16),
         g: Number.parseInt(result[2], 16),
         b: Number.parseInt(result[3], 16),
       }
-    : null
+      : null
 }
 
-function colorsEqual(color1: any, color2: any) {
+function colorsEqual(color1: { r: number; g: number; b: number }, color2: { r: number; g: number; b: number }) {
   return color1.r === color2.r && color1.g === color2.g && color1.b === color2.b
 }
 
@@ -133,5 +133,5 @@ export function rgbToHex(rgb: string): string {
   const g = Number.parseInt(result[1])
   const b = Number.parseInt(result[2])
 
-  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)
+  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()
 }
