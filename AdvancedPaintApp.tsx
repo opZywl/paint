@@ -22,6 +22,7 @@ export default function AdvancedPaintApp() {
   const containerRef = useRef<HTMLDivElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const windowColorInputRef = useRef<HTMLInputElement>(null)
+  const pageBgColorInputRef = useRef<HTMLInputElement>(null)
 
   const [isDrawing, setIsDrawing] = useState(false)
   const [color, setColor] = useState("#000000")
@@ -37,6 +38,7 @@ export default function AdvancedPaintApp() {
   const [isShapeDrawing, setIsShapeDrawing] = useState(false)
 
   const [windowBackgroundColor, setWindowBackgroundColor] = useState("#000000")
+  const [pageBackgroundColor, setPageBackgroundColor] = useState("#0D9488")
   const [windowTitle, setWindowTitle] = useState("Paint Avançado - sem título")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [tempTitle, setTempTitle] = useState(windowTitle)
@@ -112,13 +114,13 @@ export default function AdvancedPaintApp() {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
     if (mainCtx && overlayCtx && selectedImageData && selectionRect && isMovingSelection) {
-      mainCtx.fillStyle = "#FFFFFF" // Clear the original area
+      mainCtx.fillStyle = "#FFFFFF"
       mainCtx.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
-      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y) // Draw moved image
+      mainCtx.putImageData(selectedImageData, currentPos.x, currentPos.y)
       saveCanvasState()
     }
-    clearSelection(false) // Clear selection state without saving again
-    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height) // Clear overlay
+    clearSelection(false)
+    overlayCtx?.clearRect(0, 0, overlayCtx.canvas.width, overlayCtx.canvas.height)
   }, [
     getMainContext,
     getOverlayContext,
@@ -127,7 +129,7 @@ export default function AdvancedPaintApp() {
     currentPos,
     saveCanvasState,
     isMovingSelection,
-    clearSelection, // Added clearSelection as a dependency
+    clearSelection,
   ])
 
   useEffect(() => {
@@ -169,13 +171,10 @@ export default function AdvancedPaintApp() {
           case "o":
             e.preventDefault()
             const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null
-            // This relies on MenuBar having such an input. A more robust way would be to pass a trigger function.
             if (fileInput && fileInput.parentElement?.classList.contains("hidden")) {
-              // Check if it's the hidden one from MenuBar
               const clickableParent = fileInput.closest("button") || fileInput.closest('[role="menuitem"]')
               ;(clickableParent as HTMLElement)?.click()
             } else {
-              // Fallback or specific ID if MenuBar's input is identifiable
               ;(document.getElementById("file-open-trigger-in-menubar") as HTMLElement)?.click()
             }
             break
@@ -200,7 +199,7 @@ export default function AdvancedPaintApp() {
         case "i":
           setTool("eyedropper")
           break
-        case "p": // Assuming 'p' is for spray, not 's'
+        case "p":
           setTool("spray")
           break
         case "v":
@@ -270,7 +269,7 @@ export default function AdvancedPaintApp() {
         setIsMovingSelection(true)
         setSelectionMoveStart({ x: x - selectionRect.x, y: y - selectionRect.y })
       } else {
-        if (selectionRect || isMovingSelection) finalizeSelectionMove() // Finalize previous before starting new
+        if (selectionRect || isMovingSelection) finalizeSelectionMove()
         setIsSelecting(true)
       }
       return
@@ -406,7 +405,6 @@ export default function AdvancedPaintApp() {
         }
         setIsSelecting(false)
       }
-      // Do not call finalizeSelectionMove here, it's called on next click, tool change, or Esc.
       return
     }
 
@@ -420,7 +418,7 @@ export default function AdvancedPaintApp() {
       mainCtx.globalAlpha = 1
       saveCanvasState()
     } else if (isDrawing) {
-      mainCtx.beginPath() // End current path for brush/eraser
+      mainCtx.beginPath()
       saveCanvasState()
     }
 
@@ -460,7 +458,7 @@ export default function AdvancedPaintApp() {
 
   const addCustomColor = (newColor: string) => {
     if (!customColors.includes(newColor)) {
-      setCustomColors((prev) => [...prev.slice(-7), newColor]) // Keep last 7 + new one
+      setCustomColors((prev) => [...prev.slice(-7), newColor])
     }
   }
 
@@ -513,10 +511,18 @@ export default function AdvancedPaintApp() {
     setIsEditingTitle(false)
   }
   const openWindowColorPicker = () => windowColorInputRef.current?.click()
+  const openPageBackgroundColorPicker = () => pageBgColorInputRef.current?.click()
 
   return (
       <>
-        <div className="h-screen bg-teal-600 overflow-hidden select-none">
+        <input
+            type="color"
+            ref={pageBgColorInputRef}
+            className="hidden"
+            value={pageBackgroundColor}
+            onChange={(e) => setPageBackgroundColor(e.target.value)}
+        />
+        <div className="h-screen overflow-hidden select-none" style={{ backgroundColor: pageBackgroundColor }}>
           <div
               ref={containerRef}
               className="absolute border-2 border-white shadow-lg"
@@ -585,6 +591,7 @@ export default function AdvancedPaintApp() {
                 canRedo={canRedo}
                 onViewBlack={viewBlack}
                 onOpenWindowColorPicker={openWindowColorPicker}
+                onOpenPageBackgroundColorPicker={openPageBackgroundColorPicker}
             />
             <div className="flex">
               <ToolPanel
