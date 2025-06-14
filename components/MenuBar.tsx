@@ -2,7 +2,7 @@
 
 import React from "react"
 import { Button } from "@/components/ui/button"
-import { RotateCcw, RotateCw } from "lucide-react"
+import { RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface MenuBarProps {
@@ -16,6 +16,9 @@ interface MenuBarProps {
   onViewBlack: () => void
   onOpenWindowColorPicker: () => void
   onOpenPageBackgroundColorPicker: () => void
+  onZoomIn: () => void
+  onZoomOut: () => void
+  zoomLevel: number
   isMobile: boolean
 }
 
@@ -30,6 +33,9 @@ export function MenuBar({
                           onViewBlack,
                           onOpenWindowColorPicker,
                           onOpenPageBackgroundColorPicker,
+                          onZoomIn,
+                          onZoomOut,
+                          zoomLevel,
                           isMobile,
                         }: MenuBarProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -158,6 +164,13 @@ export function MenuBar({
               <Button variant="ghost" size="sm" onClick={onClear} title="Limpar Tudo">
                 Limpar
               </Button>
+              <Button variant="ghost" size="sm" onClick={onZoomOut} title="Diminuir Zoom">
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onZoomIn} title="Aumentar Zoom">
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+              <span className="text-xs">{Math.round(zoomLevel * 100)}%</span>
             </div>
         )}
       </div>
