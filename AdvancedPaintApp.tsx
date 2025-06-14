@@ -248,7 +248,31 @@ export default function AdvancedPaintApp() {
       const pasteX = mousePosition.x
       const pasteY = mousePosition.y
 
-      mainCtx.putImageData(clipboardData, pasteX, pasteY)
+      const tempCanvas = document.createElement("canvas")
+      tempCanvas.width = clipboardData.width
+      tempCanvas.height = clipboardData.height
+      const tempCtx = tempCanvas.getContext("2d")
+
+      if (tempCtx) {
+        tempCtx.putImageData(clipboardData, 0, 0)
+
+        const imageData = tempCtx.getImageData(0, 0, clipboardData.width, clipboardData.height)
+        const data = imageData.data
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i]
+          const g = data[i + 1]
+          const b = data[i + 2]
+
+          if (r >= 250 && g >= 250 && b >= 250) {
+            data[i + 3] = 0
+          }
+        }
+
+        tempCtx.putImageData(imageData, 0, 0)
+
+        mainCtx.drawImage(tempCanvas, pasteX, pasteY)
+      }
 
       setSelectionRect({
         x: pasteX,
