@@ -70,6 +70,9 @@ export default function AdvancedPaintApp() {
   const [opacity, setOpacity] = useState(1)
   const [customColors, setCustomColors] = useState<string[]>([])
 
+  const [currentFont, setCurrentFont] = useState("Arial")
+  const [currentFontSize, setCurrentFontSize] = useState(16)
+
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
@@ -246,7 +249,7 @@ export default function AdvancedPaintApp() {
           const text = prompt("Digite o texto:")
           if (text) {
             applyOperationToMainCanvas((ctx) => {
-              ctx.font = `${brushSize * 2}px Arial`
+              ctx.font = `${currentFontSize}px ${currentFont}`
               ctx.fillStyle = color
               ctx.globalAlpha = opacity
               ctx.fillText(text, x, y)
@@ -284,7 +287,8 @@ export default function AdvancedPaintApp() {
         isMovingSelection,
         finalizeSelectionMove,
         applyOperationToMainCanvas,
-        brushSize,
+        currentFontSize,
+        currentFont,
         color,
         opacity,
         saveCanvasState,
@@ -855,6 +859,10 @@ export default function AdvancedPaintApp() {
                   opacity={opacity}
                   onOpacityChange={setOpacity}
                   isMobile={isMobile}
+                  currentFont={currentFont}
+                  onFontChange={setCurrentFont}
+                  currentFontSize={currentFontSize}
+                  onFontSizeChange={setCurrentFontSize}
               />
               <div
                   ref={canvasContainerRef}
