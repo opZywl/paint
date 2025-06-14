@@ -22,6 +22,7 @@ import {
     CircleIcon as Curve,
     PencilIcon,
     PaintBucket,
+    Move,
 } from "lucide-react"
 
 interface ToolPanelProps {
@@ -67,6 +68,7 @@ export function ToolPanel({
         { id: "curve", icon: Curve, name: "Curva/Bezier" },
         { id: "text", icon: Type, name: "Texto" },
         { id: "select", icon: MousePointerSquare, name: "Seleção" },
+        { id: "move", icon: Move, name: "Mover" },
         { id: "eyedropper", icon: Pipette, name: "Conta-gotas" },
         { id: "spray", icon: Spray, name: "Spray" },
     ]
@@ -79,7 +81,7 @@ export function ToolPanel({
 
         if (value !== "") {
             const numValue = Number(value)
-            if (!isNaN(numValue) && numValue >= 8 && numValue <= 120) {
+            if (!isNaN(numValue) && numValue >= 8 && numValue <= 72) {
                 onFontSizeChange(numValue)
             }
         }

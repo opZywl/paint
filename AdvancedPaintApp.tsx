@@ -96,6 +96,10 @@ export default function AdvancedPaintApp() {
   const [isMovingSelection, setIsMovingSelection] = useState(false)
   const [selectionMoveStart, setSelectionMoveStart] = useState({ x: 0, y: 0 })
 
+  const [isMoveMode, setIsMoveMode] = useState(false)
+  const [moveStartPos, setMoveStartPos] = useState({ x: 0, y: 0 })
+  const [moveImageData, setMoveImageData] = useState<ImageData | null>(null)
+
   const titleBarTextColor = getContrastYIQUtil(windowBackgroundColor)
   const titleBarButtonHoverClass = titleBarTextColor === "white" ? "hover:bg-white/20" : "hover:bg-black/10"
 
@@ -152,6 +156,8 @@ export default function AdvancedPaintApp() {
         setSelectedImageData(null)
         setIsSelecting(false)
         setIsMovingSelection(false)
+        setIsMoveMode(false)
+        setMoveImageData(null)
         if (shouldSaveState) {
           saveCanvasState()
         }
@@ -218,6 +224,27 @@ export default function AdvancedPaintApp() {
 
         setCurrentPos({ x, y })
         setStartPos({ x, y })
+
+        if (tool === "move") {
+          const imageData = mainCtx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height)
+          const pixelData = imageData.data
+          const pixelIndex = (Math.floor(y) * canvasRef.current.width + Math.floor(x)) * 4
+
+          if (pixelData[pixelIndex] !== 255 || pixelData[pixelIndex + 1] !== 255 || pixelData[pixelIndex + 2] !== 255) {
+            setIsMoveMode(true)
+            setMoveStartPos({ x, y })
+            const selectionSize = 50
+            const selX = Math.max(0, x - selectionSize / 2)
+            const selY = Math.max(0, y - selectionSize / 2)
+            const selWidth = Math.min(selectionSize, canvasRef.current.width - selX)
+            const selHeight = Math.min(selectionSize, canvasRef.current.height - selY)
+
+            const moveData = mainCtx.getImageData(selX, selY, selWidth, selHeight)
+            setMoveImageData(moveData)
+            setSelectionRect({ x: selX, y: selY, width: selWidth, height: selHeight })
+          }
+          return
+        }
 
         if (tool === "select") {
           if (
@@ -305,6 +332,19 @@ export default function AdvancedPaintApp() {
           overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
         }
 
+        if (tool === "move" && isMoveMode && moveImageData && selectionRect) {
+          const newX = x - (moveStartPos.x - selectionRect.x)
+          const newY = y - (moveStartPos.y - selectionRect.y)
+
+          overlayCtx.putImageData(moveImageData, newX, newY)
+          overlayCtx.setLineDash([4, 2])
+          overlayCtx.strokeStyle = "rgba(255,0,0,0.8)"
+          overlayCtx.strokeRect(newX, newY, selectionRect.width, selectionRect.height)
+          overlayCtx.setLineDash([])
+          setCurrentPos({ x: newX, y: newY })
+          return
+        }
+
         if (tool === "select") {
           if (isSelecting) {
             const width = x - startPos.x
@@ -336,10 +376,10 @@ export default function AdvancedPaintApp() {
 
         if (isShapeDrawing) {
           overlayCtx.globalAlpha = opacity
-          if (tool === "rectangle") drawRectangle(overlayCtx, startPos.x, startPos.y, x, y, color)
+          if (tool === "rectangle") drawRectangle(overlayCtx, startPos.x, startPos.y, x, y, color, true)
           else if (tool === "circle") {
             const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
-            drawCircle(overlayCtx, startPos.x, startPos.y, radius, color)
+            drawCircle(overlayCtx, startPos.x, startPos.y, radius, color, true)
           }
           return
         }
@@ -371,11 +411,14 @@ export default function AdvancedPaintApp() {
         getMainContext,
         getOverlayContext,
         tool,
+        isMoveMode,
+        moveImageData,
+        selectionRect,
+        moveStartPos,
         isSelecting,
         startPos,
         isMovingSelection,
         selectedImageData,
-        selectionRect,
         selectionMoveStart,
         isShapeDrawing,
         opacity,
@@ -389,6 +432,15 @@ export default function AdvancedPaintApp() {
     const mainCtx = getMainContext()
     const overlayCtx = getOverlayContext()
     if (!mainCtx || !overlayCtx || !overlayCanvasRef.current) return
+
+    if (tool === "move" && isMoveMode && moveImageData && selectionRect) {
+      mainCtx.clearRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height)
+      mainCtx.putImageData(moveImageData, currentPos.x, currentPos.y)
+      setIsMoveMode(false)
+      setMoveImageData(null)
+      setSelectionRect(null)
+      saveCanvasState()
+    }
 
     if (tool === "select") {
       if (isSelecting) {
@@ -415,10 +467,10 @@ export default function AdvancedPaintApp() {
 
     if (isShapeDrawing) {
       mainCtx.globalAlpha = opacity
-      if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color)
+      if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color, true)
       else if (tool === "circle") {
         const radius = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2))
-        drawCircle(mainCtx, startPos.x, startPos.y, radius, color)
+        drawCircle(mainCtx, startPos.x, startPos.y, radius, color, true)
       }
       mainCtx.globalAlpha = 1
       saveCanvasState()
@@ -437,14 +489,17 @@ export default function AdvancedPaintApp() {
     getMainContext,
     getOverlayContext,
     tool,
+    isMoveMode,
+    moveImageData,
+    selectionRect,
+    currentPos,
+    saveCanvasState,
     isSelecting,
     startPos,
-    currentPos,
     clearSelection,
     isShapeDrawing,
     opacity,
     color,
-    saveCanvasState,
     isDrawing,
     isMovingSelection,
     finalizeSelectionMove,
@@ -455,7 +510,7 @@ export default function AdvancedPaintApp() {
     if (pos) processStartDrawing(pos.x, pos.y)
   }
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection) return
+    if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection && !isMoveMode) return
     const pos = getScaledPos(e.clientX, e.clientY)
     if (pos) processDraw(pos.x, pos.y)
   }
@@ -467,7 +522,7 @@ export default function AdvancedPaintApp() {
     }
   }
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection) return
+    if (!isDrawing && !isShapeDrawing && !isSelecting && !isMovingSelection && !isMoveMode) return
     const touch = e.touches[0]
     if (touch) {
       const pos = getScaledPos(touch.clientX, touch.clientY)
@@ -609,6 +664,12 @@ export default function AdvancedPaintApp() {
         case "p":
           setTool("spray")
           break
+        case "m":
+          if (!e.ctrlKey && !e.metaKey) {
+            setTool("move")
+            if (isMovingSelection || selectionRect) finalizeSelectionMove()
+          }
+          break
         case "v":
           if (!e.ctrlKey && !e.metaKey) {
             setTool("select")
@@ -616,7 +677,11 @@ export default function AdvancedPaintApp() {
           }
           break
         case "escape":
-          if (tool === "select" && (selectionRect || isSelecting || isMovingSelection)) clearSelection()
+          if (
+              (tool === "select" || tool === "move") &&
+              (selectionRect || isSelecting || isMovingSelection || isMoveMode)
+          )
+            clearSelection()
           break
       }
     }
@@ -633,18 +698,21 @@ export default function AdvancedPaintApp() {
     selectionRect,
     isSelecting,
     isMovingSelection,
+    isMoveMode,
     finalizeSelectionMove,
     clearSelection,
   ])
 
   useEffect(() => {
-    if (tool !== "select") {
-      if (selectionRect || isMovingSelection) {
+    if (tool !== "select" && tool !== "move") {
+      if (selectionRect || isMovingSelection || isMoveMode) {
         finalizeSelectionMove()
         setSelectionRect(null)
+        setIsMoveMode(false)
+        setMoveImageData(null)
       }
     }
-  }, [tool, selectionRect, isMovingSelection, finalizeSelectionMove])
+  }, [tool, selectionRect, isMovingSelection, isMoveMode, finalizeSelectionMove])
 
   const addCustomColor = (newColor: string) => {
     if (!customColors.includes(newColor)) setCustomColors((prev) => [...prev.slice(-7), newColor])
@@ -903,7 +971,7 @@ export default function AdvancedPaintApp() {
               <span>
                 Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
               </span>
-                  <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção</span>
+                  <span>Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção | M: Mover</span>
                 </div>
             )}
           </div>
