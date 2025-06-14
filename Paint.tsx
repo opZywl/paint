@@ -52,7 +52,7 @@ const getContrastYIQUtil = (hexcolor: string): "black" | "white" => {
   return yiq >= 128 ? "black" : "white"
 }
 
-export default function AdvancedPaintApp() {
+export default function Paint() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)

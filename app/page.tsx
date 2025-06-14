@@ -1,7 +1,7 @@
 "use client"
 
-import AdvancedPaintApp from "../AdvancedPaintApp"
+import Paint from "../Paint"
 
 export default function SyntheticDeployPage() {
-  return <AdvancedPaintApp />
+  return <Paint />
 }
