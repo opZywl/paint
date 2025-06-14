@@ -274,18 +274,8 @@ export default function AdvancedPaintApp() {
         mainCtx.drawImage(tempCanvas, pasteX, pasteY)
       }
 
-      setSelectionRect({
-        x: pasteX,
-        y: pasteY,
-        width: clipboardData.width,
-        height: clipboardData.height,
-      })
-
-      const newImageData = mainCtx.getImageData(pasteX, pasteY, clipboardData.width, clipboardData.height)
-      setSelectedImageData(newImageData)
-
       saveCanvasState()
-      console.log("Seleção colada na posição do mouse!")
+      console.log("Imagem colada na posição do mouse!")
     }
   }, [clipboardData, mousePosition, getMainContext, saveCanvasState, clearSelection])
 
@@ -617,24 +607,17 @@ export default function AdvancedPaintApp() {
       (file: File) => {
         const img = new Image()
         img.onload = () => {
-          if (isMobile || isMaximized) resizeCanvases()
-          else resizeCanvases(img.width, img.height)
           setTimeout(() => {
             const freshMainCtx = getMainContext()
             if (freshMainCtx && canvasRef.current) {
-              freshMainCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-              freshMainCtx.fillStyle = "#FFFFFF"
-              freshMainCtx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
               freshMainCtx.drawImage(img, 0, 0)
               saveCanvasState()
-              setWindowTitle(`Lucas Paint - ${file.name}`)
-              setTempTitle(`Lucas Paint - ${file.name}`)
             }
           }, 50)
         }
         img.src = URL.createObjectURL(file)
       },
-      [getMainContext, isMobile, isMaximized, resizeCanvases, saveCanvasState],
+      [getMainContext, saveCanvasState],
   )
 
   const handleClear = useCallback(() => {
