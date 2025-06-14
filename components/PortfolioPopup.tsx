@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { User, X, ExternalLink } from "lucide-react"
 
 export function PortfolioPopup() {
-    const [isOpen, setIsOpen] = useState(false)
+    const [isOpen, setIsOpen] = useState(true)
 
     const togglePopup = () => setIsOpen(!isOpen)
 
@@ -47,7 +47,7 @@ export function PortfolioPopup() {
                             </button>
                         </div>
 
-                        <p className="text-sm text-gray-300 mb-4">it's awesome</p>
+                        <p className="text-sm text-gray-300 mb-4">it's awesome.. see others projects</p>
 
                         <a href="https://lucas-lima.vercel.app" target="_blank" rel="noopener noreferrer" className="w-full">
                             <Button variant="secondary" className="w-full bg-gray-700 hover:bg-gray-600 text-white">
