@@ -55,7 +55,11 @@ export function ToolPanel({
                                 onClick={() => onToolChange(tool.id)}
                                 title={tool.name}
                             >
-                                <IconComponent className="w-5 h-5" />
+                                {IconComponent ? (
+                                    <IconComponent className="w-5 h-5" />
+                                ) : (
+                                    <div className="w-5 h-5 flex items-center justify-center">?</div>
+                                )}
                             </Button>
                         )
                     })}
@@ -104,7 +108,11 @@ export function ToolPanel({
                             onClick={() => onToolChange(tool.id)}
                             title={tool.name}
                         >
-                            <IconComponent className="w-4 h-4" />
+                            {IconComponent ? (
+                                <IconComponent className="w-4 h-4" />
+                            ) : (
+                                <div className="w-4 h-4 flex items-center justify-center">?</div>
+                            )}
                         </Button>
                     )
                 })}
