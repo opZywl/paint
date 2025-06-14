@@ -9,6 +9,12 @@ import {
     Pipette,
     SprayCanIcon as Spray,
     MousePointerIcon as MousePointerSquare,
+    Minus as Line,
+    Shapes as Polygon,
+    Star as StarIcon,
+    ArrowRight as Arrow,
+    LucidePackage2 as Curve,
+    Pencil as PencilIcon,
 } from "lucide-react"
 
 interface ToolPanelProps {
@@ -39,6 +45,12 @@ export function ToolPanel({
         { id: "select", icon: MousePointerSquare, name: "Seleção" },
         { id: "eyedropper", icon: Pipette, name: "Conta-gotas" },
         { id: "spray", icon: Spray, name: "Spray" },
+        { id: "line", icon: Line, name: "Linha Reta" },
+        { id: "polygon", icon: Polygon, name: "Polígono" },
+        { id: "star", icon: StarIcon, name: "Estrela" },
+        { id: "arrow", icon: Arrow, name: "Seta" },
+        { id: "curve", icon: Curve, name: "Curva/Bezier" },
+        { id: "pencil", icon: PencilIcon, name: "Lápis" },
     ]
 
     if (isMobile) {
