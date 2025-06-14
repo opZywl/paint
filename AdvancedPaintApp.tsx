@@ -667,11 +667,15 @@ export default function AdvancedPaintApp() {
   }, [getMainContext, saveCanvasState, clearSelection])
 
   const handleZoomIn = useCallback(() => {
-    setZoomLevel((prev) => Math.min(prev * 1.2, 5))
+    setZoomLevel((prev) => Math.min(prev + 0.05, 5))
   }, [])
 
   const handleZoomOut = useCallback(() => {
-    setZoomLevel((prev) => Math.max(prev / 1.2, 0.1))
+    setZoomLevel((prev) => Math.max(prev - 0.05, 0.1))
+  }, [])
+
+  const handleZoomChange = useCallback((newZoom: number) => {
+    setZoomLevel(Math.max(0.1, Math.min(5, newZoom)))
   }, [])
 
   useEffect(() => {
@@ -1049,6 +1053,7 @@ export default function AdvancedPaintApp() {
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}
                 zoomLevel={zoomLevel}
+                onZoomChange={handleZoomChange}
                 isMobile={isMobile}
             />
             <div className={`flex flex-grow min-h-0 ${isMobile ? "flex-col" : ""}`}>

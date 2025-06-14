@@ -2,6 +2,7 @@
 
 import React from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
@@ -19,6 +20,7 @@ interface MenuBarProps {
   onZoomIn: () => void
   onZoomOut: () => void
   zoomLevel: number
+  onZoomChange: (zoom: number) => void
   isMobile: boolean
 }
 
@@ -36,9 +38,15 @@ export function MenuBar({
                           onZoomIn,
                           onZoomOut,
                           zoomLevel,
+                          onZoomChange,
                           isMobile,
                         }: MenuBarProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const [zoomInput, setZoomInput] = React.useState(Math.round(zoomLevel * 100).toString())
+
+  React.useEffect(() => {
+    setZoomInput(Math.round(zoomLevel * 100).toString())
+  }, [zoomLevel])
 
   const handleFileLoad = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -56,6 +64,31 @@ export function MenuBar({
 
   const handleHelpClick = () => {
     window.open("https://lucas-lima.xyz", "_blank", "noopener,noreferrer")
+  }
+
+  const handleZoomInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setZoomInput(value)
+  }
+
+  const handleZoomInputBlur = () => {
+    const numValue = Number.parseInt(zoomInput)
+    if (!isNaN(numValue) && numValue >= 10 && numValue <= 500) {
+      onZoomChange(numValue / 100)
+    } else {
+      setZoomInput(Math.round(zoomLevel * 100).toString())
+    }
+  }
+
+  const handleZoomInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleZoomInputBlur()
+      e.currentTarget.blur()
+    }
+    if (e.key === "Escape") {
+      setZoomInput(Math.round(zoomLevel * 100).toString())
+      e.currentTarget.blur()
+    }
   }
 
   return (
@@ -167,10 +200,19 @@ export function MenuBar({
               <Button variant="ghost" size="sm" onClick={onZoomOut} title="Diminuir Zoom">
                 <ZoomOut className="w-4 h-4" />
               </Button>
+              <Input
+                  type="text"
+                  value={zoomInput}
+                  onChange={handleZoomInputChange}
+                  onBlur={handleZoomInputBlur}
+                  onKeyDown={handleZoomInputKeyDown}
+                  className="w-12 h-8 text-xs text-center"
+                  title="Zoom (10-500%)"
+              />
+              <span className="text-xs">%</span>
               <Button variant="ghost" size="sm" onClick={onZoomIn} title="Aumentar Zoom">
                 <ZoomIn className="w-4 h-4" />
               </Button>
-              <span className="text-xs">{Math.round(zoomLevel * 100)}%</span>
             </div>
         )}
       </div>
