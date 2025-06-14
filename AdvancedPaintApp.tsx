@@ -408,10 +408,10 @@ export default function AdvancedPaintApp() {
 
         if (isShapeDrawing) {
           overlayCtx.globalAlpha = opacity
-          if (tool === "rectangle") drawRectangle(overlayCtx, startPos.x, startPos.y, x, y, color, true)
+          if (tool === "rectangle") drawRectangle(overlayCtx, startPos.x, startPos.y, x, y, color, false)
           else if (tool === "circle") {
             const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
-            drawCircle(overlayCtx, startPos.x, startPos.y, radius, color, true)
+            drawCircle(overlayCtx, startPos.x, startPos.y, radius, color, false)
           }
           return
         }
@@ -495,10 +495,10 @@ export default function AdvancedPaintApp() {
 
     if (isShapeDrawing) {
       mainCtx.globalAlpha = opacity
-      if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color, true)
+      if (tool === "rectangle") drawRectangle(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color, false)
       else if (tool === "circle") {
         const radius = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2))
-        drawCircle(mainCtx, startPos.x, startPos.y, radius, color, true)
+        drawCircle(mainCtx, startPos.x, startPos.y, radius, color, false)
       }
       mainCtx.globalAlpha = 1
       saveCanvasState()
