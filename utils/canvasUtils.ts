@@ -42,6 +42,24 @@ export function drawCircle(
   }
 }
 
+export function drawLine(
+    ctx: CanvasRenderingContext2D,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    color: string,
+    lineWidth: number,
+) {
+  ctx.beginPath()
+  ctx.moveTo(startX, startY)
+  ctx.lineTo(endX, endY)
+  ctx.strokeStyle = color
+  ctx.lineWidth = lineWidth
+  ctx.lineCap = "round"
+  ctx.stroke()
+}
+
 export function floodFill(
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -134,4 +152,32 @@ export function rgbToHex(rgb: string): string {
   const b = Number.parseInt(result[2])
 
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()
+}
+
+export function drawPolygon(
+    ctx: CanvasRenderingContext2D,
+    points: { x: number; y: number }[],
+    color: string,
+    lineWidth: number,
+    filled = false,
+) {
+  if (points.length < 2) return
+
+  ctx.beginPath()
+  ctx.moveTo(points[0].x, points[0].y)
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y)
+  }
+
+  if (filled && points.length > 2) {
+    ctx.closePath()
+    ctx.fillStyle = color
+    ctx.fill()
+  }
+
+  ctx.strokeStyle = color
+  ctx.lineWidth = lineWidth
+  ctx.lineCap = "round"
+  ctx.lineJoin = "round"
+  ctx.stroke()
 }

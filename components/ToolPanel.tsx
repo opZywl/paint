@@ -9,12 +9,13 @@ import {
     Pipette,
     SprayCanIcon as Spray,
     MousePointerIcon as MousePointerSquare,
-    Minus as Line,
-    Shapes as Polygon,
-    Star as StarIcon,
-    ArrowRight as Arrow,
-    LucidePackage2 as Curve,
-    Pencil as PencilIcon,
+    PenLineIcon as Line,
+    OctagonIcon as Polygon,
+    StarIcon,
+    ArrowLeftIcon as Arrow,
+    CircleIcon as Curve,
+    PencilIcon,
+    PaintBucket,
 } from "lucide-react"
 
 interface ToolPanelProps {
@@ -38,19 +39,20 @@ export function ToolPanel({
                           }: ToolPanelProps) {
     const tools = [
         { id: "brush", icon: Brush, name: "Pincel" },
+        { id: "pencil", icon: PencilIcon, name: "Lápis" },
         { id: "eraser", icon: Eraser, name: "Borracha" },
+        { id: "bucket", icon: PaintBucket, name: "Balde de Tinta" },
         { id: "rectangle", icon: Square, name: "Retângulo" },
         { id: "circle", icon: Circle, name: "Círculo" },
-        { id: "text", icon: Type, name: "Texto" },
-        { id: "select", icon: MousePointerSquare, name: "Seleção" },
-        { id: "eyedropper", icon: Pipette, name: "Conta-gotas" },
-        { id: "spray", icon: Spray, name: "Spray" },
         { id: "line", icon: Line, name: "Linha Reta" },
         { id: "polygon", icon: Polygon, name: "Polígono" },
         { id: "star", icon: StarIcon, name: "Estrela" },
         { id: "arrow", icon: Arrow, name: "Seta" },
         { id: "curve", icon: Curve, name: "Curva/Bezier" },
-        { id: "pencil", icon: PencilIcon, name: "Lápis" },
+        { id: "text", icon: Type, name: "Texto" },
+        { id: "select", icon: MousePointerSquare, name: "Seleção" },
+        { id: "eyedropper", icon: Pipette, name: "Conta-gotas" },
+        { id: "spray", icon: Spray, name: "Spray" },
     ]
 
     if (isMobile) {
