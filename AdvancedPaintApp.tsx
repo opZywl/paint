@@ -40,14 +40,13 @@ const getContrastYIQUtil = (hexcolor: string): "black" | "white" => {
     G = Number.parseInt(hexcolor[2] + hexcolor[2], 16)
     B = Number.parseInt(hexcolor[3] + hexcolor[3], 16)
   } else {
-    // #RRGGBB or #RRGGBBAA
     R = Number.parseInt(hexcolor.substring(1, 3), 16)
     G = Number.parseInt(hexcolor.substring(3, 5), 16)
     B = Number.parseInt(hexcolor.substring(5, 7), 16)
   }
 
   if (isNaN(R) || isNaN(G) || isNaN(B)) {
-    return "white" // Default for invalid parsed colors
+    return "white"
   }
   const yiq = (R * 299 + G * 587 + B * 114) / 1000
   return yiq >= 128 ? "black" : "white"
@@ -69,6 +68,7 @@ export default function AdvancedPaintApp() {
   const [brushSize, setBrushSize] = useState(10)
   const [opacity, setOpacity] = useState(1)
   const [customColors, setCustomColors] = useState<string[]>([])
+  const [zoomLevel, setZoomLevel] = useState(1)
 
   const [currentFont, setCurrentFont] = useState("Arial")
   const [currentFontSize, setCurrentFontSize] = useState(16)
@@ -279,6 +279,30 @@ export default function AdvancedPaintApp() {
     }
   }, [clipboardData, mousePosition, getMainContext, saveCanvasState, clearSelection])
 
+  const drawArrow = useCallback(
+      (ctx: CanvasRenderingContext2D, startX: number, startY: number, endX: number, endY: number, color: string) => {
+        const headlen = 10
+        const dx = endX - startX
+        const dy = endY - startY
+        const angle = Math.atan2(dy, dx)
+
+        ctx.beginPath()
+        ctx.moveTo(startX, startY)
+        ctx.lineTo(endX, endY)
+        ctx.strokeStyle = color
+        ctx.lineWidth = 2
+        ctx.stroke()
+
+        ctx.beginPath()
+        ctx.moveTo(endX, endY)
+        ctx.lineTo(endX - headlen * Math.cos(angle - Math.PI / 6), endY - headlen * Math.sin(angle - Math.PI / 6))
+        ctx.moveTo(endX, endY)
+        ctx.lineTo(endX - headlen * Math.cos(angle + Math.PI / 6), endY - headlen * Math.sin(angle + Math.PI / 6))
+        ctx.stroke()
+      },
+      [],
+  )
+
   const processStartDrawing = useCallback(
       (x: number, y: number) => {
         const mainCtx = getMainContext()
@@ -347,7 +371,7 @@ export default function AdvancedPaintApp() {
           setColor(rgbToHex(pickedColor))
           return
         }
-        if (tool === "rectangle" || tool === "circle") {
+        if (tool === "rectangle" || tool === "circle" || tool === "arrow") {
           setIsShapeDrawing(true)
           return
         }
@@ -426,6 +450,8 @@ export default function AdvancedPaintApp() {
           else if (tool === "circle") {
             const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2))
             drawCircle(overlayCtx, startPos.x, startPos.y, radius, color, false)
+          } else if (tool === "arrow") {
+            drawArrow(overlayCtx, startPos.x, startPos.y, x, y, color)
           }
           return
         }
@@ -448,7 +474,11 @@ export default function AdvancedPaintApp() {
         } else {
           mainCtx.globalCompositeOperation = "source-over"
           mainCtx.strokeStyle = color
-          mainCtx.lineWidth = brushSize
+          if (tool === "pencil") {
+            mainCtx.lineWidth = 1
+          } else {
+            mainCtx.lineWidth = brushSize
+          }
         }
         mainCtx.lineCap = "round"
         mainCtx.stroke()
@@ -469,6 +499,7 @@ export default function AdvancedPaintApp() {
         color,
         isDrawing,
         brushSize,
+        drawArrow,
       ],
   )
 
@@ -513,6 +544,8 @@ export default function AdvancedPaintApp() {
       else if (tool === "circle") {
         const radius = Math.sqrt(Math.pow(currentPos.x - startPos.x, 2) + Math.pow(currentPos.y - startPos.y, 2))
         drawCircle(mainCtx, startPos.x, startPos.y, radius, color, false)
+      } else if (tool === "arrow") {
+        drawArrow(mainCtx, startPos.x, startPos.y, currentPos.x, currentPos.y, color)
       }
       mainCtx.globalAlpha = 1
       saveCanvasState()
@@ -544,6 +577,7 @@ export default function AdvancedPaintApp() {
     opacity,
     color,
     isDrawing,
+    drawArrow,
   ])
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -632,6 +666,14 @@ export default function AdvancedPaintApp() {
     }
   }, [getMainContext, saveCanvasState, clearSelection])
 
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel((prev) => Math.min(prev * 1.2, 5))
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel((prev) => Math.max(prev / 1.2, 0.1))
+  }, [])
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isMobile || isMaximized) resizeCanvases()
@@ -688,6 +730,15 @@ export default function AdvancedPaintApp() {
             e.preventDefault()
             handlePaste()
             break
+          case "=":
+          case "+":
+            e.preventDefault()
+            handleZoomIn()
+            break
+          case "-":
+            e.preventDefault()
+            handleZoomOut()
+            break
         }
       }
       switch (e.key.toLowerCase()) {
@@ -713,6 +764,12 @@ export default function AdvancedPaintApp() {
           break
         case "p":
           setTool("spray")
+          break
+        case "l":
+          setTool("pencil")
+          break
+        case "a":
+          setTool("arrow")
           break
         case "m":
           if (!e.ctrlKey && !e.metaKey) {
@@ -760,6 +817,8 @@ export default function AdvancedPaintApp() {
     handleSave,
     handleCopy,
     handlePaste,
+    handleZoomIn,
+    handleZoomOut,
     tool,
     selectionRect,
     isSelecting,
@@ -877,8 +936,15 @@ export default function AdvancedPaintApp() {
     }
   }
   const getCanvasElementStyle = (): React.CSSProperties => {
-    if (isMobile || isMaximized) return { width: "100%", height: "100%" }
-    else return { width: `${canvasRef.current?.width || 1200}px`, height: `${canvasRef.current?.height || 800}px` }
+    if (isMobile || isMaximized)
+      return { width: "100%", height: "100%", transform: `scale(${zoomLevel})`, transformOrigin: "top left" }
+    else
+      return {
+        width: `${canvasRef.current?.width || 1200}px`,
+        height: `${canvasRef.current?.height || 800}px`,
+        transform: `scale(${zoomLevel})`,
+        transformOrigin: "top left",
+      }
   }
 
   return (
@@ -963,7 +1029,6 @@ export default function AdvancedPaintApp() {
                         variant="ghost"
                         className={`h-5 w-5 p-0 min-w-0 ${titleBarButtonHoverClass}`}
                         style={{ color: titleBarTextColor }}
-                        // onClick={() => { /* Close action if needed */ }}
                     >
                       <X className="h-3 w-3" />
                     </Button>
@@ -981,6 +1046,9 @@ export default function AdvancedPaintApp() {
                 onViewBlack={viewBlack}
                 onOpenWindowColorPicker={openWindowColorPicker}
                 onOpenPageBackgroundColorPicker={openPageBackgroundColorPicker}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                zoomLevel={zoomLevel}
                 isMobile={isMobile}
             />
             <div className={`flex flex-grow min-h-0 ${isMobile ? "flex-col" : ""}`}>
@@ -1034,12 +1102,12 @@ export default function AdvancedPaintApp() {
             {!isMobile && (
                 <div className="bg-gray-300 px-2 py-1 text-sm border-t border-gray-400 flex justify-between shrink-0">
               <span>
-                Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}%
-                {clipboardData && " | Clipboard: ✓"}
+                Ferramenta: {tool} | Tam: {brushSize}px | Opac: {Math.round(opacity * 100)}% | Zoom:{" "}
+                {Math.round(zoomLevel * 100)}%{clipboardData && " | Clipboard: ✓"}
               </span>
                   <span>
-                Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção | M: Mover | Ctrl+C: Copiar | Ctrl+V:
-                Colar
+                Ctrl+O: Abrir | Ctrl+S: Salvar | Ctrl+Z: Desfazer | V: Seleção | M: Mover | L: Lápis | A: Seta | Ctrl+C:
+                Copiar | Ctrl+V: Colar | Ctrl++/-: Zoom
               </span>
                 </div>
             )}
