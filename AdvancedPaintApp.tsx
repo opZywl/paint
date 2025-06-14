@@ -177,7 +177,8 @@ export default function AdvancedPaintApp() {
           const mainCtx = mainCanvas.getContext("2d")
           if (!mainCtx) return
           const tempCanvas = document.createElement("canvas")
-          if (mainCanvas.width > 0 && mainCanvas.height > 0) {
+          const hasContent = mainCanvas.width > 0 && mainCanvas.height > 0
+          if (hasContent) {
             tempCanvas.width = mainCanvas.width
             tempCanvas.height = mainCanvas.height
             const tempCtx = tempCanvas.getContext("2d")
@@ -186,17 +187,24 @@ export default function AdvancedPaintApp() {
           const newWidth = forceWidth ?? canvasContainer.clientWidth
           const newHeight = forceHeight ?? canvasContainer.clientHeight
           if (newWidth <= 0 || newHeight <= 0) return
-          mainCanvas.width = newWidth
-          mainCanvas.height = newHeight
-          overlayCanvas.width = newWidth
-          overlayCanvas.height = newHeight
+
+          const finalWidth = hasContent ? Math.max(newWidth, mainCanvas.width) : newWidth
+          const finalHeight = hasContent ? Math.max(newHeight, mainCanvas.height) : newHeight
+
+          mainCanvas.width = finalWidth
+          mainCanvas.height = finalHeight
+          overlayCanvas.width = finalWidth
+          overlayCanvas.height = finalHeight
+
           mainCtx.fillStyle = "#FFFFFF"
-          mainCtx.fillRect(0, 0, newWidth, newHeight)
-          if (tempCanvas.width > 0 && tempCanvas.height > 0) {
+          mainCtx.fillRect(0, 0, finalWidth, finalHeight)
+
+          if (hasContent && tempCanvas.width > 0 && tempCanvas.height > 0) {
             mainCtx.drawImage(tempCanvas, 0, 0)
           }
           const overlayCtx = overlayCanvas.getContext("2d")
-          overlayCtx?.clearRect(0, 0, newWidth, newHeight)
+          overlayCtx?.clearRect(0, 0, finalWidth, finalHeight)
+
           saveCanvasState()
         }
       },
@@ -821,6 +829,15 @@ export default function AdvancedPaintApp() {
     handleSave,
     handleCopy,
     handlePaste,
+    handleZoomIn,
+    handleZoomOut,
+    tool,
+    selectionRect,
+    isSelecting,
+    isMovingSelection,
+    isMoveMode,
+    clearSelection,
+    getMainContext,
     handleZoomIn,
     handleZoomOut,
     tool,
