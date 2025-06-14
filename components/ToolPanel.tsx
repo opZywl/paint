@@ -15,14 +15,10 @@ import {
     Pipette,
     SprayCanIcon as Spray,
     MousePointerIcon as MousePointerSquare,
-    PenLineIcon as Line,
-    OctagonIcon as Polygon,
-    StarIcon,
-    ArrowLeftIcon as Arrow,
-    CircleIcon as Curve,
+    Move,
     PencilIcon,
     PaintBucket,
-    Move,
+    ArrowLeftIcon as Arrow,
 } from "lucide-react"
 
 interface ToolPanelProps {
@@ -61,11 +57,7 @@ export function ToolPanel({
         { id: "bucket", icon: PaintBucket, name: "Balde de Tinta" },
         { id: "rectangle", icon: Square, name: "Retângulo" },
         { id: "circle", icon: Circle, name: "Círculo" },
-        { id: "line", icon: Line, name: "Linha Reta" },
-        { id: "polygon", icon: Polygon, name: "Polígono" },
-        { id: "star", icon: StarIcon, name: "Estrela" },
         { id: "arrow", icon: Arrow, name: "Seta" },
-        { id: "curve", icon: Curve, name: "Curva/Bezier" },
         { id: "text", icon: Type, name: "Texto" },
         { id: "select", icon: MousePointerSquare, name: "Seleção" },
         { id: "move", icon: Move, name: "Mover" },
