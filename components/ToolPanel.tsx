@@ -73,7 +73,7 @@ export function ToolPanel({
 
         if (value !== "") {
             const numValue = Number(value)
-            if (!isNaN(numValue) && numValue >= 8 && numValue <= 72) {
+            if (!isNaN(numValue) && numValue >= 8 && numValue <= 120) {
                 onFontSizeChange(numValue)
             }
         }
@@ -179,56 +179,58 @@ export function ToolPanel({
 
     if (isMobile) {
         return (
-            <div className="w-full bg-gray-300 p-1 border-b border-gray-400 flex flex-col items-center">
-                <div className="flex flex-wrap justify-center gap-1 mb-2">
+            <div className="w-full bg-gray-300 p-2 border-b border-gray-400">
+                <div className="grid grid-cols-6 gap-1 mb-3">
                     {tools.map((tool) => {
                         const IconComponent = tool.icon
                         return (
                             <Button
                                 key={tool.id}
                                 variant="ghost"
-                                className={`w-10 h-10 p-1 ${selectedTool === tool.id ? "bg-gray-400 border border-gray-500 shadow-inner" : ""}`}
+                                className={`h-12 w-full p-1 flex flex-col items-center justify-center ${
+                                    selectedTool === tool.id ? "bg-gray-400 border border-gray-500 shadow-inner" : ""
+                                }`}
                                 onClick={() => onToolChange(tool.id)}
                                 title={tool.name}
                             >
-                                <IconComponent className="w-5 h-5" />
+                                <IconComponent className="w-5 h-5 mb-1" />
+                                <span className="text-xs leading-none">{tool.name.split(" ")[0]}</span>
                             </Button>
                         )
                     })}
                 </div>
-                <div className="flex gap-4 w-full px-2">
-                    {selectedTool === "text" ? (
-                        <div className="w-full grid grid-cols-2 gap-2">{renderTextOptions()}</div>
-                    ) : (
-                        <div className="flex gap-4 w-full">
-                            <div className="flex-1">
-                                <Label className="text-xs">Tam:</Label>
-                                <Input
-                                    type="range"
-                                    min="1"
-                                    max="50"
-                                    value={brushSize}
-                                    onChange={(e) => onBrushSizeChange(Number(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                                />
-                                <div className="text-xs text-center">{brushSize}px</div>
-                            </div>
-                            <div className="flex-1">
-                                <Label className="text-xs">Opac:</Label>
-                                <Input
-                                    type="range"
-                                    min="0.1"
-                                    max="1"
-                                    step="0.1"
-                                    value={opacity}
-                                    onChange={(e) => onOpacityChange(Number(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                                />
-                                <div className="text-xs text-center">{Math.round(opacity * 100)}%</div>
-                            </div>
+
+                {selectedTool === "text" ? (
+                    <div className="grid grid-cols-2 gap-2">{renderTextOptions()}</div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <Label className="text-xs">Tamanho:</Label>
+                            <Input
+                                type="range"
+                                min="1"
+                                max="50"
+                                value={brushSize}
+                                onChange={(e) => onBrushSizeChange(Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <div className="text-xs text-center">{brushSize}px</div>
                         </div>
-                    )}
-                </div>
+                        <div>
+                            <Label className="text-xs">Opacidade:</Label>
+                            <Input
+                                type="range"
+                                min="0.1"
+                                max="1"
+                                step="0.1"
+                                value={opacity}
+                                onChange={(e) => onOpacityChange(Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <div className="text-xs text-center">{Math.round(opacity * 100)}%</div>
+                        </div>
+                    </div>
+                )}
             </div>
         )
     }

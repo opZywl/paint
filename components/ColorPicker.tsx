@@ -26,6 +26,10 @@ const mobileDefaultColors = [
   "#00FFFF",
   "#0000FF",
   "#FF00FF",
+  "#FFA500",
+  "#FFC0CB",
+  "#A52A2A",
+  "#90EE90",
 ]
 
 const desktopDefaultColors = [
@@ -68,11 +72,40 @@ export function ColorPicker({
                             }: ColorPickerProps) {
   const colorsToDisplay = isMobile ? mobileDefaultColors : desktopDefaultColors
 
+  if (isMobile) {
+    return (
+        <div className="bg-gray-300 p-2 border-t border-gray-400">
+          <div className="grid grid-cols-10 gap-1 mb-2">
+            {colorsToDisplay.map((color) => (
+                <Button
+                    key={color}
+                    variant="ghost"
+                    className={`w-8 h-8 p-0 min-w-0 border shrink-0 ${
+                        selectedColor === color ? "ring-2 ring-gray-600" : "border-gray-400"
+                    }`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => onColorChange(color)}
+                />
+            ))}
+          </div>
+          <div className="flex justify-center">
+            <input
+                type="color"
+                value={selectedColor}
+                onChange={(e) => {
+                  onColorChange(e.target.value)
+                  onAddCustomColor(e.target.value)
+                }}
+                className="w-16 h-8 border border-gray-400 cursor-pointer rounded"
+            />
+          </div>
+        </div>
+    )
+  }
+
   return (
-      <div
-          className={`flex bg-gray-300 p-2 border-t border-gray-400 ${isMobile ? "overflow-x-auto flex-nowrap" : "flex-wrap"}`}
-      >
-        <div className={`flex gap-1 mr-4 ${isMobile ? "flex-nowrap" : "flex-wrap"}`}>
+      <div className="flex bg-gray-300 p-2 border-t border-gray-400 flex-wrap">
+        <div className="flex gap-1 mr-4 flex-wrap">
           {colorsToDisplay.map((color) => (
               <Button
                   key={color}
@@ -83,30 +116,26 @@ export function ColorPicker({
               />
           ))}
         </div>
-        {!isMobile && (
-            <>
-              <div className="flex flex-wrap gap-1 mr-4">
-                {customColors.map((color, index) => (
-                    <Button
-                        key={`custom-${index}`}
-                        variant="ghost"
-                        className={`w-6 h-6 p-0 min-w-0 border ${selectedColor === color ? "ring-2 ring-gray-600" : "border-gray-400"}`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => onColorChange(color)}
-                    />
-                ))}
-              </div>
-              <input
-                  type="color"
-                  value={selectedColor}
-                  onChange={(e) => {
-                    onColorChange(e.target.value)
-                    onAddCustomColor(e.target.value)
-                  }}
-                  className="w-8 h-6 border border-gray-400 cursor-pointer"
+        <div className="flex flex-wrap gap-1 mr-4">
+          {customColors.map((color, index) => (
+              <Button
+                  key={`custom-${index}`}
+                  variant="ghost"
+                  className={`w-6 h-6 p-0 min-w-0 border ${selectedColor === color ? "ring-2 ring-gray-600" : "border-gray-400"}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => onColorChange(color)}
               />
-            </>
-        )}
+          ))}
+        </div>
+        <input
+            type="color"
+            value={selectedColor}
+            onChange={(e) => {
+              onColorChange(e.target.value)
+              onAddCustomColor(e.target.value)
+            }}
+            className="w-8 h-6 border border-gray-400 cursor-pointer"
+        />
       </div>
   )
 }

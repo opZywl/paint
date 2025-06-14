@@ -91,10 +91,116 @@ export function MenuBar({
     }
   }
 
+  if (isMobile) {
+    return (
+        <div className="bg-gray-300 px-2 py-1 border-b border-gray-400">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="text-xs px-2 py-1 h-auto" id="file-open-trigger-in-menubar">
+                    Arquivo
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <input type="file" accept="image/*" onChange={handleFileLoad} className="hidden" ref={fileInputRef} />
+                  <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        triggerFileInput()
+                      }}
+                  >
+                    Abrir
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onSave}>Salvar</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onClear}>Novo</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="text-xs px-2 py-1 h-auto">
+                    Editar
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={onUndo} disabled={!canUndo}>
+                    Desfazer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onRedo} disabled={!canRedo}>
+                    Refazer
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="text-xs px-2 py-1 h-auto">
+                    Ver
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={onViewBlack}>Visualizar em Preto</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="text-xs px-2 py-1 h-auto">
+                    Opções
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        onOpenPageBackgroundColorPicker()
+                      }}
+                  >
+                    Cor do Fundo
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} className="h-8 w-8 p-0">
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} className="h-8 w-8 p-0">
+                <RotateCw className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={onZoomOut} className="h-8 w-8 p-0">
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <Input
+                  type="text"
+                  value={zoomInput}
+                  onChange={handleZoomInputChange}
+                  onBlur={handleZoomInputBlur}
+                  onKeyDown={handleZoomInputKeyDown}
+                  className="w-12 h-8 text-xs text-center"
+              />
+              <span className="text-xs">%</span>
+              <Button variant="ghost" size="sm" onClick={onZoomIn} className="h-8 w-8 p-0">
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" onClick={onClear} className="text-xs px-2 py-1 h-auto">
+              Limpar
+            </Button>
+          </div>
+        </div>
+    )
+  }
+
   return (
-      <div
-          className={`bg-gray-300 px-2 py-1 border-b border-gray-400 flex items-center gap-2 ${isMobile ? "overflow-x-auto" : ""}`}
-      >
+      <div className="bg-gray-300 px-2 py-1 border-b border-gray-400 flex items-center gap-2">
         <div className="flex items-center gap-1 mr-4 whitespace-nowrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -186,35 +292,33 @@ export function MenuBar({
           </Button>
         </div>
 
-        {!isMobile && (
-            <div className="flex items-center gap-1 border-l border-gray-400 pl-2">
-              <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Desfazer (Ctrl+Z)">
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Refazer (Ctrl+Y)">
-                <RotateCw className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onClear} title="Limpar Tudo">
-                Limpar
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onZoomOut} title="Diminuir Zoom">
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <Input
-                  type="text"
-                  value={zoomInput}
-                  onChange={handleZoomInputChange}
-                  onBlur={handleZoomInputBlur}
-                  onKeyDown={handleZoomInputKeyDown}
-                  className="w-12 h-8 text-xs text-center"
-                  title="Zoom (10-500%)"
-              />
-              <span className="text-xs">%</span>
-              <Button variant="ghost" size="sm" onClick={onZoomIn} title="Aumentar Zoom">
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-            </div>
-        )}
+        <div className="flex items-center gap-1 border-l border-gray-400 pl-2">
+          <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Desfazer (Ctrl+Z)">
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Refazer (Ctrl+Y)">
+            <RotateCw className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClear} title="Limpar Tudo">
+            Limpar
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onZoomOut} title="Diminuir Zoom">
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Input
+              type="text"
+              value={zoomInput}
+              onChange={handleZoomInputChange}
+              onBlur={handleZoomInputBlur}
+              onKeyDown={handleZoomInputKeyDown}
+              className="w-12 h-8 text-xs text-center"
+              title="Zoom (10-500%)"
+          />
+          <span className="text-xs">%</span>
+          <Button variant="ghost" size="sm" onClick={onZoomIn} title="Aumentar Zoom">
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
   )
 }
