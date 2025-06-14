@@ -1,8 +1,11 @@
 "use client"
 import { Button } from "@/components/ui/button"
+import React from "react"
+
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { useState } from "react"
 import {
     Brush,
     Eraser,
@@ -48,6 +51,8 @@ export function ToolPanel({
                               currentFontSize = 16,
                               onFontSizeChange = () => {},
                           }: ToolPanelProps) {
+    const [fontSizeInput, setFontSizeInput] = useState(currentFontSize.toString())
+
     const tools = [
         { id: "brush", icon: Brush, name: "Pincel" },
         { id: "pencil", icon: PencilIcon, name: "Lápis" },
@@ -68,6 +73,50 @@ export function ToolPanel({
 
     const fontOptions = ["Arial", "Times New Roman", "Courier New", "Verdana", "Georgia", "Comic Sans MS", "Impact"]
 
+    const handleFontSizeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value
+        setFontSizeInput(value)
+
+        if (value !== "") {
+            const numValue = Number(value)
+            if (!isNaN(numValue) && numValue >= 8 && numValue <= 120) {
+                onFontSizeChange(numValue)
+            }
+        }
+    }
+
+    const handleFontSizeBlur = () => {
+        if (fontSizeInput === "" || isNaN(Number(fontSizeInput))) {
+            setFontSizeInput(currentFontSize.toString())
+        } else {
+            const numValue = Number(fontSizeInput)
+            if (numValue < 8) {
+                setFontSizeInput("8")
+                onFontSizeChange(8)
+            } else if (numValue > 120) {
+                setFontSizeInput("120")
+                onFontSizeChange(120)
+            } else {
+                onFontSizeChange(numValue)
+            }
+        }
+    }
+
+    const handleFontSizeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            handleFontSizeBlur()
+            e.currentTarget.blur()
+        }
+        if (e.key === "Escape") {
+            setFontSizeInput(currentFontSize.toString())
+            e.currentTarget.blur()
+        }
+    }
+
+    React.useEffect(() => {
+        setFontSizeInput(currentFontSize.toString())
+    }, [currentFontSize])
+
     const renderTextOptions = () => (
         <>
             <div>
@@ -86,14 +135,18 @@ export function ToolPanel({
                 </Select>
             </div>
             <div>
-                <Label className="text-xs">Tamanho:</Label>
+                <Label htmlFor="font-size-input" className="text-xs">
+                    Tamanho:
+                </Label>
                 <Input
-                    type="number"
-                    value={currentFontSize}
-                    onChange={(e) => onFontSizeChange(Math.max(8, Number(e.target.value)))}
+                    id="font-size-input"
+                    type="text"
+                    value={fontSizeInput}
+                    onChange={handleFontSizeInputChange}
+                    onBlur={handleFontSizeBlur}
+                    onKeyDown={handleFontSizeKeyDown}
                     className="h-8 text-xs"
-                    min="8"
-                    max="72"
+                    placeholder="16"
                 />
                 <div className="text-xs text-center">{currentFontSize}px</div>
             </div>
